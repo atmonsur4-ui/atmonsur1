@@ -1,0 +1,40 @@
+import { CONTACT } from '../lib/api'
+import { Link } from '../lib/router'
+
+// Plain-language starting point that matches how this site works. Have it reviewed before relying on it legally.
+export const legalPages = {
+  '/privacy': {
+    title: 'Privacy policy',
+    sections: [
+      ['Who we are', `Atmonsur Multiglobal Resources Ltd, ${CONTACT.address}. Contact us about your data at ${CONTACT.email} or ${CONTACT.phone}.`],
+      ['What we collect', 'When you place an order we collect your name, email address, phone number, delivery address and order details. When you send an enquiry we collect your name, phone number, email address and message. We do not offer customer accounts.'],
+      ['Payments', 'Payments are processed by Paystack. Your card or bank details are entered on Paystack’s secure page and are never sent to or stored by us.'],
+      ['How we use it', 'We use your details only to process, deliver and support your order, answer your enquiries, and keep the records the law requires. We do not sell your information or use it for marketing without your permission.'],
+      ['Who we share it with', 'Paystack (payment processing), our email provider (to notify our team of new orders and enquiries), and delivery partners where needed to deliver your order. The map on our contact page is provided by Google Maps.'],
+      ['On your device', 'Your cart and price view are saved in your browser’s local storage so they survive a page refresh. We do not use advertising or tracking cookies.'],
+      ['How long we keep it', 'We keep order records for as long as needed for accounting and legal purposes, and enquiries for as long as needed to deal with them.'],
+      ['Your rights', `Under Nigeria’s data protection law you can ask to see, correct or delete the personal information we hold about you. Email ${CONTACT.email} or call ${CONTACT.phone}.`],
+    ],
+  },
+  '/terms': {
+    title: 'Terms & conditions',
+    sections: [
+      ['Prices', 'Prices are shown in naira and include the product only. Wholesale prices apply automatically when you order at least the minimum quantity shown for that product. We may change prices at any time, but the price you pay is the one shown at checkout.'],
+      ['Delivery', 'Delivery fees are shown at checkout before you pay. Free pickup is available from our Epe store. After payment we contact you by phone to arrange delivery or pickup.'],
+      ['Payment and confirmation', 'You pay through Paystack by card, bank transfer or USSD. Your order is confirmed once payment succeeds and you receive an order reference.'],
+      ['Availability', 'If an item you paid for turns out to be unavailable, we will contact you to offer a replacement or refund that item.'],
+      ['Problems with your order', `If something is missing, damaged or wrong, contact us as soon as possible on ${CONTACT.care} or ${CONTACT.email}. Any agreed refund is paid back through Paystack to your original payment method.`],
+    ],
+  },
+} satisfies Record<string, { title: string; sections: [string, string][] }>
+
+export function Legal({ path }: { path: keyof typeof legalPages }) {
+  const page = legalPages[path]
+  return <>
+    <section className="contact-hero"><div className="shell"><span className="kicker light">Atmonsur Multiglobal Resources Ltd</span><h1>{page.title}</h1><p>Last updated: 26 November 2026</p></div></section>
+    <section className="section shell legal">
+      {page.sections.map(([heading, text]) => <div key={heading}><h2>{heading}</h2><p>{text}</p></div>)}
+      <p><Link className="text-link" to="/contact">Questions? Contact us</Link></p>
+    </section>
+  </>
+}
