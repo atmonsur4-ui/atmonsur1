@@ -14,9 +14,9 @@ const RANGE: [string, string, string, string][] = [
   ['Beverages', 'Pepsi', 'bottle', '#1d4fa3'],
   ['Beverages', 'Coca-Cola', 'bottle', '#c8102e'],
   ['Beverages', 'Bigi Products', 'bottle', '#e8590c'],
-  ['Dairy & NDC Products', 'Kivo Goodtime Milk', 'carton', '#f2a11a'],
+  ['Dairy & NDC Products', 'Kivo Good Time Creamer', 'carton', '#f2a11a'],
   ['Dairy & NDC Products', 'Kivo Garri Mix', 'bag', '#d8a23b'],
-  ['Dairy & NDC Products', 'Leya Milk', 'carton', '#2f7ec7'],
+  ['Dairy & NDC Products', 'Leya Non Dairy Milk', 'carton', '#2f7ec7'],
   ['Dairy & NDC Products', 'Checkers Peanut', 'jar', '#f4b41b'],
   ['Dairy & NDC Products', 'Creviva Products', 'carton', '#6b3e26'],
   ['Cleaning', 'Hypo Bleach & Cleaner', 'cleaner', '#19956f'],
@@ -36,6 +36,46 @@ const OLD_DEMO_PRICES: Record<string, [number, number]> = { // [retail, wholesal
   'Chicky Chicken Noodles': [1380000, 1240000], 'Checkers Crunchy Peanut': [1440000, 1275000], 'Hypo Bleach & Cleaner': [960000, 840000],
 }
 const OLD_DEMO = Object.keys(OLD_DEMO_PRICES)
+
+// Product photos supplied by the owner, shipped in public/products/. Keyed by product name.
+const PHOTOS: Record<string, string> = {
+  'Checkers Peanut': '/products/checkers-peanut.jpg',
+  'Leya Non Dairy Milk': '/products/leya-milk.jpg',
+  'Kivo Garri Mix': '/products/kivo-garri-mix.jpg',
+  'Kivo Good Time Creamer': '/products/kivo-goodtime-milk.jpg',
+  'Pepsi': '/products/pepsi.jpg',
+  'American Cola': '/products/american-cola.jpg',
+}
+
+/**
+ * Adds the supplied photos to products that don't have one yet, exactly once per database (remembered in
+ * app_settings), so a photo the owner later removes or replaces in admin is never put back.
+ */
+// Product renames for databases created with the earlier names. Each runs once (remembered in app_settings), so a
+// later rename by the owner in admin is never undone. Only products from the range's own category are touched.
+const RENAMES: [key: string, from: string, to: string, category: string][] = [
+  ['rename_leya_v1', 'Leya Milk', 'Leya Non Dairy Milk', 'Dairy & NDC Products'],
+  ['rename_kivo_creamer_v1', 'Kivo Goodtime Milk', 'Kivo Good Time Creamer', 'Dairy & NDC Products'],
+]
+
+async function applyRenames() {
+  for (const [key, from, to, category] of RENAMES) {
+    if ((await sql`select 1 from app_settings where key = ${key}`).length) continue
+    await sql.begin(async tx => {
+      await tx`update products set name = ${to} where name = ${from} and category = ${category}`
+      await tx`insert into app_settings (key, value) values (${key}, ${new Date().toISOString()}) on conflict do nothing`
+    })
+  }
+}
+
+async function applyPhotos() {
+  const done = await sql`select 1 from app_settings where key = 'photos_v1'`
+  if (done.length) return
+  await sql.begin(async tx => {
+    for (const [name, url] of Object.entries(PHOTOS)) await tx`update products set image_url = ${url} where name = ${name} and image_url is null`
+    await tx`insert into app_settings (key, value) values ('photos_v1', ${new Date().toISOString()}) on conflict do nothing`
+  })
+}
 
 async function seedCatalogue() {
   await sql`insert into categories ${sql(CATEGORIES)} on conflict (name) do update set note = excluded.note, color = excluded.color, art_kind = excluded.art_kind, sort = excluded.sort`
@@ -65,7 +105,7 @@ async function replaceDemoCatalogue() {
 export async function migrate() {
   await sql.unsafe(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'))
   const [{ count }] = await sql`select count(*)::int as count from categories`
-  if (count > 0) return replaceDemoCatalogue()
+  if (count > 0) { await replaceDemoCatalogue(); await applyRenames(); return applyPhotos() }
   await seedCatalogue()
   await sql`insert into delivery_zones ${sql([
     { id: 'pickup', name: 'Pick up from our Epe store (free)', fee_kobo: 0, needs_address: false, sort: 1 },
@@ -73,6 +113,7 @@ export async function migrate() {
     { id: 'lagos', name: 'Delivery elsewhere in Lagos', fee_kobo: 400000, needs_address: true, sort: 3 },
     { id: 'outside-lagos', name: 'Delivery outside Lagos', fee_kobo: 800000, needs_address: true, sort: 4 },
   ])}`
+  await applyPhotos()
   console.log('Database was empty: added categories, the product range (hidden until priced) and delivery options')
 }
 

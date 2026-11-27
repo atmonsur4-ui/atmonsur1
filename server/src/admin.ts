@@ -9,7 +9,7 @@ import { sql } from './db.ts'
 import { naira } from './notify.ts'
 import { getOrder } from './orders.ts'
 import { clientIp, overLimit } from './rateLimit.ts'
-import { imageType, MAX_IMAGE_BYTES, parseCategoryForm, parseProductForm, parseZoneForm, UPLOADED_IMAGE } from './validate.ts'
+import { imageType, MAX_IMAGE_BYTES, ownImage, parseCategoryForm, parseProductForm, parseZoneForm, UPLOADED_IMAGE } from './validate.ts'
 
 export const admin = new Hono()
 
@@ -277,8 +277,8 @@ const productForm = async (p: Record<string, any> | null, error = '') => {
             ${v.image_url ? html`<label><input type="checkbox" name="remove_photo"> Remove the current photo</label>` : ''}
           </div>
         </div>
-        <details ${v.image_url && !UPLOADED_IMAGE.test(v.image_url) ? 'open' : ''}><summary class="muted">Or use a photo link instead</summary>
-          <label for="image_url">Photo link (https://…)</label><input id="image_url" name="image_url" maxlength="500" value="${v.image_url && !UPLOADED_IMAGE.test(v.image_url) ? v.image_url : ''}">
+        <details ${v.image_url && !ownImage(v.image_url) ? 'open' : ''}><summary class="muted">Or use a photo link instead</summary>
+          <label for="image_url">Photo link (https://…)</label><input id="image_url" name="image_url" maxlength="500" value="${v.image_url && !ownImage(v.image_url) ? v.image_url : ''}">
         </details>
         <input type="hidden" name="current_image" value="${v.image_url ?? ''}">
       </fieldset>
@@ -323,7 +323,7 @@ const saveProduct = async (c: Context, id: number | null) => {
   const form = await c.req.parseBody()
   const current = typeof form.current_image === 'string' ? form.current_image : ''
   // Keep the current uploaded photo unless it's removed, replaced by a new upload, or replaced by a link.
-  const fields = { ...form, image_url: form.remove_photo === 'on' ? '' : (form.image_url || (UPLOADED_IMAGE.test(current) ? current : '')) }
+  const fields = { ...form, image_url: form.remove_photo === 'on' ? '' : (form.image_url || (ownImage(current) ? current : '')) }
   const redo = (error: string) => productForm({ ...form, id, image_url: current, active: form.active === 'on' }, error)
   const parsed = parseProductForm(fields)
   if (!parsed.ok) return c.html(await redo(parsed.error), 400)

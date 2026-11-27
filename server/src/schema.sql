@@ -127,6 +127,12 @@ alter table orders add column if not exists payment_method text not null default
 
 -- Product photos uploaded in admin, stored in the database so no extra file-storage service is needed.
 -- Served at /images/<id>; a replaced photo gets a new id, so each address can be cached forever.
+-- One-off data steps already applied to this database (e.g. adding supplied product photos once).
+create table if not exists app_settings (
+  key text primary key,
+  value text not null
+);
+
 create table if not exists images (
   id int generated always as identity primary key,
   mime text not null check (mime in ('image/jpeg', 'image/png', 'image/webp')),

@@ -126,3 +126,11 @@ test('uploaded photos: real image types only, and their addresses are accepted',
   assert.equal(parseProductForm({ ...base, image_url: '/images/../admin' }).ok, false)
   assert.equal(parseProductForm({ ...base, image_url: 'http://insecure.example/x.jpg' }).ok, false)
 })
+
+test('photos shipped with the site are accepted as product photos', async () => {
+  const { parseProductForm, ownImage } = await import('./validate.ts')
+  const base = { name: 'Pepsi', category: 'Beverages', pack: '50cl x 12', price: '4500', bulk_price: '3980', bulk_min_qty: '10', art_kind: 'bottle', color: '#1d4fa3' }
+  assert.equal(parseProductForm({ ...base, image_url: '/products/pepsi.jpg' }).ok, true)
+  assert.equal(ownImage('/products/../admin.jpg'), false)
+  assert.equal(ownImage('/products/pepsi.svg'), false)
+})

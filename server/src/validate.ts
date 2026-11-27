@@ -115,7 +115,7 @@ export function parseProductForm(f: Record<string, unknown>): Result<ProductForm
   if (Number.isNaN(v.price_kobo)) return { ok: false, error: 'Retail price must be a number above 0.' }
   if (Number.isNaN(v.bulk_price_kobo) || v.bulk_price_kobo > v.price_kobo) return { ok: false, error: 'Wholesale price must be above 0 and not more than the retail price.' }
   if (!Number.isInteger(v.bulk_min_qty) || v.bulk_min_qty < 1) return { ok: false, error: 'Wholesale minimum must be a whole number of 1 or more.' }
-  if (v.image_url && !/^https:\/\/\S+$/.test(v.image_url) && !UPLOADED_IMAGE.test(v.image_url)) return { ok: false, error: 'Photo link must start with https://' }
+  if (v.image_url && !/^https:\/\/\S+$/.test(v.image_url) && !ownImage(v.image_url)) return { ok: false, error: 'Photo link must start with https://' }
   if (!ART.includes(v.art_kind)) return { ok: false, error: 'Choose an illustration.' }
   if (!COLOR.test(v.color)) return { ok: false, error: 'Colour must look like #3796df.' }
   if (!Number.isInteger(v.sort)) return { ok: false, error: 'Order must be a whole number.' }
@@ -147,6 +147,9 @@ export function parseCategoryForm(f: Record<string, unknown>): Result<{ name: st
 
 /** Address of a photo uploaded in admin (served by the store itself). */
 export const UPLOADED_IMAGE = /^\/images\/(\d{1,9})$/
+/** Address of a product photo shipped with the website (public/products/). */
+export const BUNDLED_IMAGE = /^\/products\/[a-z0-9-]{1,60}\.(jpg|png|webp)$/
+export const ownImage = (url: string) => UPLOADED_IMAGE.test(url) || BUNDLED_IMAGE.test(url)
 export const MAX_IMAGE_BYTES = 3 * 1024 * 1024 // admin shrinks photos before upload; this only stops oversized files
 
 /** Identifies JPEG, PNG and WebP from the file's first bytes (never trust the file name or browser-sent type). */
