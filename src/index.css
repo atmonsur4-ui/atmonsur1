@@ -97,3 +97,8 @@ main:focus{outline:none}.honeypot{position:absolute;left:-9999px;width:1px;heigh
 @media(max-width:900px){.product-detail-grid{grid-template-columns:1fr;gap:28px}.product-detail-image{aspect-ratio:4/3}}
 @media(max-width:600px){.product-detail h1{font-size:28px}.price-tiers{grid-template-columns:1fr 1fr}.tier b{font-size:20px}.buy-row .button{min-width:0;width:100%}}
 .wholesale-copy{position:relative;z-index:1} /* keep text above the decorative circle on small screens */
+/* Delivery options (product page) */
+.detail-h{font:800 18px 'Manrope Variable',sans-serif;color:var(--navy);margin:24px 0 10px}
+.delivery-options{border:1px solid #e3e8ee;border-radius:10px;overflow:hidden;margin-bottom:10px}
+.delivery-options li{display:flex;justify-content:space-between;gap:16px;padding:11px 14px;font-size:14px;color:#40506a}.delivery-options li+li{border-top:1px solid #edf0f4}
+.delivery-options b{color:var(--navy);white-space:nowrap}

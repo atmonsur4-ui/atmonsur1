@@ -120,3 +120,7 @@ create index if not exists sessions_customer on sessions (customer_id);
 
 -- Product pages: optional longer text shown on the product's own page.
 alter table products add column if not exists description text;
+
+-- How the customer pays: 'palmpay' (online, before the order counts) or 'on_delivery' (cash or transfer on delivery or pickup,
+-- used while PalmPay isn't set up). On-delivery orders stay status 'pending' until the owner marks them paid in admin.
+alter table orders add column if not exists payment_method text not null default 'palmpay';

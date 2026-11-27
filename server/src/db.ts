@@ -40,7 +40,7 @@ export type OrderRow = {
   customer_name: string; email: string; phone: string; delivery_zone: string; delivery_zone_name: string
   address: string | null; city: string | null; notes: string | null
   subtotal_kobo: number; delivery_fee_kobo: number; total_kobo: number
-  payment_reference: string | null; created_at: Date; paid_at: Date | null
+  payment_reference: string | null; payment_method: 'palmpay' | 'on_delivery'; created_at: Date; paid_at: Date | null
 }
 export type OrderItemRow = { id: number; order_id: number; product_id: number | null; name: string; pack: string; qty: number; unit_price_kobo: number; line_total_kobo: number }
 export type PricedRow = { id: number; name: string; pack: string; price_kobo: number; bulk_price_kobo: number; bulk_min_qty: number }

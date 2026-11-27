@@ -52,15 +52,18 @@ admin.get('/', c => c.redirect('/admin/orders'))
 
 // ---- Orders ----
 admin.get('/orders', async c => {
-  const status = c.req.query('status') ?? 'paid'
-  const orders = status === 'all'
-    ? await sql`select * from orders order by created_at desc limit 200`
+  // "open" = orders to deal with: paid online, or placed to pay on delivery (not cancelled).
+  const status = c.req.query('status') ?? 'open'
+  const orders = status === 'all' ? await sql`select * from orders order by created_at desc limit 200`
+    : status === 'open' ? await sql`select * from orders where (status = 'paid' or (payment_method = 'on_delivery' and status = 'pending'))
+        and fulfilment <> 'cancelled' order by created_at desc limit 200`
     : await sql`select * from orders where status = ${status} order by created_at desc limit 200`
+  const payLabel = (o: Record<string, any>) => (o.status === 'pending' && o.payment_method === 'on_delivery' ? 'pay on delivery' : o.status)
   return c.html(page('Orders', html`
-    <p class="filters">Show: ${['paid', 'pending', 'failed', 'all'].map(s => html`<a href="?status=${s}" ${s === status ? html`aria-current="page" style="font-weight:700"` : ''}>${s[0].toUpperCase() + s.slice(1)}</a>`)}</p>
-    <p class="muted">Only <b>paid</b> orders have been paid for. Pending means the customer started checkout but hasn't paid (yet).</p>
+    <p class="filters">Show: ${[['open', 'To fulfil'], ['paid', 'Paid'], ['pending', 'Unpaid'], ['failed', 'Failed'], ['all', 'All']].map(([s, label]) => html`<a href="?status=${s}" ${s === status ? html`aria-current="page" style="font-weight:700"` : ''}>${label}</a>`)}</p>
+    <p class="muted"><b>To fulfil</b> shows orders paid online plus <b>pay on delivery</b> orders. Call pay-on-delivery customers to confirm, collect payment on delivery or pickup, then mark the order paid. <b>Unpaid</b> also lists customers who started PalmPay checkout but didn't pay.</p>
     <table><thead><tr><th>Date</th><th>Reference</th><th>Customer</th><th>Delivery</th><th>Total</th><th>Payment</th><th>Fulfilment</th></tr></thead><tbody>
-    ${orders.length ? orders.map(o => html`<tr><td>${when(o.created_at)}</td><td><a href="/admin/orders/${o.reference}">${o.reference}</a></td><td>${o.customer_name}<br><span class="muted">${o.phone}</span></td><td>${o.delivery_zone_name}</td><td>${naira(o.total_kobo)}</td><td><span class="pill ${o.status}">${o.status}</span></td><td><span class="pill ${o.fulfilment}">${o.fulfilment}</span></td></tr>`) : html`<tr><td colspan="7" class="muted">No orders here yet.</td></tr>`}
+    ${orders.length ? orders.map(o => html`<tr><td>${when(o.created_at)}</td><td><a href="/admin/orders/${o.reference}">${o.reference}</a></td><td>${o.customer_name}<br><span class="muted">${o.phone}</span></td><td>${o.delivery_zone_name}</td><td>${naira(o.total_kobo)}</td><td><span class="pill ${o.status}">${payLabel(o)}</span></td><td><span class="pill ${o.fulfilment}">${o.fulfilment}</span></td></tr>`) : html`<tr><td colspan="7" class="muted">No orders here yet.</td></tr>`}
     </tbody></table>`, c.req.query('msg')))
 })
 
@@ -68,7 +71,9 @@ admin.get('/orders/:reference', async c => {
   const o = await getOrder(c.req.param('reference'))
   if (!o) return c.html(page('Order not found', html`<a href="/admin/orders">Back to orders</a>`), 404)
   return c.html(page(`Order ${o.reference}`, html`
-    <div class="card"><p><span class="pill ${o.status}">Payment: ${o.status}</span> ${o.paid_at ? html`<span class="muted">paid ${when(o.paid_at)} · PalmPay order ${o.payment_reference}</span>` : ''}</p>
+    <div class="card"><p><span class="pill ${o.status}">Payment: ${o.status === 'pending' && o.payment_method === 'on_delivery' ? 'pay on delivery (not paid yet)' : o.status}</span>
+      ${o.paid_at ? html`<span class="muted">paid ${when(o.paid_at)} · ${o.payment_method === 'on_delivery' ? 'collected on delivery or pickup' : html`PalmPay order ${o.payment_reference}`}</span>` : ''}</p>
+      ${o.payment_method === 'on_delivery' && o.status === 'pending' ? html`<form method="post" action="/admin/orders/${o.reference}/paid" class="inline"><button>Mark as paid (${naira(o.total_kobo)} received)</button></form>` : ''}
     <p><b>${o.customer_name}</b> <span class="pill">${o.customer_id ? 'account' : 'guest'}</span><br><a href="tel:${o.phone}">${o.phone}</a> · <a href="mailto:${o.email}">${o.email}</a></p>
     <p><b>${o.delivery_zone_name}</b>${o.address ? html`<br>${o.address}, ${o.city}` : ''}</p>${o.notes ? html`<p><b>Notes:</b> ${o.notes}</p>` : ''}
     <p class="muted">Placed ${when(o.created_at)}</p></div>
@@ -80,6 +85,14 @@ admin.get('/orders/:reference', async c => {
       <div class="inline"><select id="f" name="fulfilment">${['new', 'dispatched', 'delivered', 'cancelled'].map(f => html`<option ${f === o.fulfilment ? 'selected' : ''}>${f}</option>`)}</select><button>Save</button></div>
       ${o.status === 'paid' ? html`<p class="muted">Cancelling here does not refund the customer. Refund paid orders from your PalmPay merchant dashboard.</p>` : ''}</form>
     <p><a href="/admin/orders">← All orders</a></p>`, c.req.query('msg')))
+})
+
+// Pay-on-delivery orders: the owner records the cash or transfer once it's received.
+admin.post('/orders/:reference/paid', async c => {
+  const ref = c.req.param('reference')
+  const done = await sql`update orders set status = 'paid', paid_at = now()
+    where reference = ${ref} and payment_method = 'on_delivery' and status = 'pending' returning id`
+  return c.redirect(back(`/admin/orders/${ref}`, done.length ? 'Marked as paid' : 'Error: this order can not be marked paid here'))
 })
 
 admin.post('/orders/:reference/fulfilment', async c => {

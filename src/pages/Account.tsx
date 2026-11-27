@@ -120,7 +120,7 @@ function Dashboard() {
         : <ul className="order-list" aria-labelledby="orders-h">{orders.map(o => <li key={o.reference} className="order-card">
           <div className="order-card-head">
             <div><b>{new Date(o.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</b><span className="muted">{o.reference}</span></div>
-            <span className={`pill ${o.status === 'paid' ? o.fulfilment : 'pending'}`}>{o.status === 'paid' ? statusLabel[o.fulfilment] ?? o.fulfilment : 'Not paid'}</span>
+            <span className={`pill ${o.status === 'paid' || o.payment_method === 'on_delivery' ? o.fulfilment : 'pending'}`}>{orderLabel(o)}</span>
           </div>
           <p className="order-items">{o.items.map(i => `${i.qty} × ${i.name}`).join(', ')}</p>
           <div className="order-card-foot"><b>{formatKobo(o.total_kobo)}</b>
@@ -156,6 +156,9 @@ function Dashboard() {
 }
 
 const statusLabel: Record<string, string> = { new: 'Paid · preparing', dispatched: 'On its way', delivered: 'Delivered', cancelled: 'Cancelled' }
+const orderLabel = (o: PastOrder) => o.status === 'paid' ? statusLabel[o.fulfilment] ?? o.fulfilment
+  : o.payment_method !== 'on_delivery' ? 'Not paid'
+  : o.fulfilment === 'cancelled' ? 'Cancelled' : o.fulfilment === 'dispatched' ? 'On its way · pay on delivery' : o.fulfilment === 'delivered' ? 'Delivered' : 'Placed · pay on delivery'
 
 function Verify() {
   const { query } = useLocation()

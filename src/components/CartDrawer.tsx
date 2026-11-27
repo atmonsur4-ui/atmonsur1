@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { Icon } from './Icon'
-import { ProductImage } from './Product'
+import { ProductImage, deliverySummary } from './Product'
 import { formatKobo } from '../lib/api'
 import { navigate } from '../lib/router'
 import { productPath } from '../../server/src/slug.ts'
 import { useStore } from '../lib/store'
 
 export function CartDrawer() {
-  const { cartOpen, setCartOpen, lines, count, subtotal, setQty } = useStore()
+  const { cartOpen, setCartOpen, lines, count, subtotal, setQty, catalogue } = useStore()
   const panel = useRef<HTMLElement>(null)
 
   // Dialog behaviour: focus moves in, Tab stays inside, Escape closes, focus returns to where it was.
@@ -63,9 +63,9 @@ export function CartDrawer() {
       </div>
       {lines.length > 0 && <div className="cart-summary">
         <div><span>Subtotal</span><b>{formatKobo(subtotal)}</b></div>
-        <p>Delivery is added at checkout.</p>
+        <p>{deliverySummary(catalogue?.zones ?? []) || 'Delivery'}. You choose at checkout.</p>
         <button className="checkout" onClick={() => go('/checkout')}>Proceed to checkout <Icon name="arrow" /></button>
-        <span className="secure"><Icon name="shield" size={15} /> Secure payment with PalmPay</span>
+        <span className="secure"><Icon name="shield" size={15} /> {catalogue?.payments === 'palmpay' ? 'Secure payment with PalmPay' : 'Pay on delivery or when you collect'}</span>
       </div>}
     </aside>
   </>

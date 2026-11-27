@@ -4,9 +4,10 @@ export type Product = {
   badge: string | null; image_url: string | null; art_kind: string; color: string; description: string | null
 }
 export type Zone = { id: string; name: string; fee_kobo: number; needs_address: boolean }
-export type Catalogue = { categories: Category[]; products: Product[]; zones: Zone[] }
+// payments: 'palmpay' once the store's PalmPay keys are set, otherwise customers pay on delivery or pickup.
+export type Catalogue = { categories: Category[]; products: Product[]; zones: Zone[]; payments: 'palmpay' | 'on_delivery' }
 export type OrderSummary = {
-  reference: string; status: 'pending' | 'paid' | 'failed'; first_name: string; delivery: string
+  reference: string; status: 'pending' | 'paid' | 'failed'; payment_method: 'palmpay' | 'on_delivery'; first_name: string; delivery: string
   items: { name: string; pack: string; qty: number; line_total_kobo: number }[]
   subtotal_kobo: number; delivery_fee_kobo: number; total_kobo: number
 }
@@ -28,7 +29,7 @@ export type Account = {
   address: string | null; city: string | null; delivery_zone: string | null
 }
 export type PastOrder = {
-  reference: string; status: 'pending' | 'paid'; fulfilment: string; created_at: string; delivery: string; total_kobo: number
+  reference: string; status: 'pending' | 'paid'; payment_method: 'palmpay' | 'on_delivery'; fulfilment: string; created_at: string; delivery: string; total_kobo: number
   items: { product_id: number | null; name: string; pack: string; qty: number; line_total_kobo: number }[]
 }
 type WithAccount = { customer: Account }

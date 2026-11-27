@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { ProductCard, ProductImage } from '../components/Product'
+import { DeliveryOptions, ProductCard, ProductImage } from '../components/Product'
 import { CONTACT, formatKobo } from '../lib/api'
 import { Link, navigate, useLocation } from '../lib/router'
 import { useStore } from '../lib/store'
@@ -76,8 +76,10 @@ export function ProductPage() {
           <dl className="product-facts">
             <div><dt>Pack size</dt><dd>{p.pack}</dd></div>
             <div><dt>Wholesale from</dt><dd>{p.bulk_min_qty} packs</dd></div>
-            <div><dt>Delivery</dt><dd>Fee shown at checkout, or free pickup in Epe</dd></div>
           </dl>
+          <h2 className="detail-h">Delivery options</h2>
+          <DeliveryOptions />
+          <p className="muted">{catalogue.payments === 'palmpay' ? 'Pay securely online with PalmPay at checkout.' : 'Pay by cash or bank transfer on delivery or when you collect.'}</p>
           <p className="muted">Questions about this product? <a className="underline" href={`${CONTACT.whatsapp}?text=${encodeURIComponent(`Hello Atmonsur, I have a question about ${p.name} (${p.pack})`)}`} target="_blank" rel="noreferrer">Ask us on WhatsApp</a> or call {CONTACT.phone}.</p>
         </div>
       </div>

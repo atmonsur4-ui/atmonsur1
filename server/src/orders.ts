@@ -26,14 +26,19 @@ export async function settleOrder(tx: PalmPayOrder) {
   }
   const updated = await sql`update orders set status = 'paid', paid_at = now(), payment_reference = ${tx.orderNo ?? null}
     where id = ${order.id} and status = 'pending' returning id`
-  if (updated.length) {
-    await notifyOwner(`New paid order ${order.reference}: ${naira(order.total_kobo)}`, [
-      `Customer: ${order.customer_name}`, `Phone: ${order.phone}`, `Email: ${order.email}`, `Delivery: ${order.delivery_zone_name}`,
-      ...(order.address ? [`Address: ${order.address}, ${order.city ?? ''}`] : []), ...(order.notes ? [`Notes: ${order.notes}`] : []),
-      '', ...order.items.map(i => `${i.qty} × ${i.name} (${i.pack}) = ${naira(i.line_total_kobo)}`),
-      '', `Subtotal: ${naira(order.subtotal_kobo)}`, `Delivery: ${naira(order.delivery_fee_kobo)}`, `Total paid: ${naira(order.total_kobo)}`,
-      '', `View in admin: ${process.env.SITE_URL ?? ''}/admin/orders/${order.reference}`,
-    ].join('\n'))
-  }
+  if (updated.length) await notifyNewOrder(order)
   return { ...order, status: updated.length ? ('paid' as const) : order.status }
+}
+
+/** Emails the owner a new order: paid online, or placed to pay on delivery/pickup. */
+export async function notifyNewOrder(order: NonNullable<Awaited<ReturnType<typeof getOrder>>>) {
+  const onDelivery = order.payment_method === 'on_delivery'
+  await notifyOwner(onDelivery ? `New order ${order.reference} (pay on delivery): ${naira(order.total_kobo)}` : `New paid order ${order.reference}: ${naira(order.total_kobo)}`, [
+    `Customer: ${order.customer_name}`, `Phone: ${order.phone}`, `Email: ${order.email}`, `Delivery: ${order.delivery_zone_name}`,
+    ...(order.address ? [`Address: ${order.address}, ${order.city ?? ''}`] : []), ...(order.notes ? [`Notes: ${order.notes}`] : []),
+    '', ...order.items.map(i => `${i.qty} × ${i.name} (${i.pack}) = ${naira(i.line_total_kobo)}`),
+    '', `Subtotal: ${naira(order.subtotal_kobo)}`, `Delivery: ${naira(order.delivery_fee_kobo)}`,
+    onDelivery ? `Total to collect: ${naira(order.total_kobo)} (NOT PAID YET: call the customer to confirm, collect payment on delivery or pickup)` : `Total paid: ${naira(order.total_kobo)}`,
+    '', `View in admin: ${process.env.SITE_URL ?? ''}/admin/orders/${order.reference}`,
+  ].join('\n'))
 }

@@ -12,6 +12,7 @@ export function Checkout() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const zone = zones.find(z => z.id === zoneId)
+  const online = catalogue?.payments === 'palmpay'
   // Pre-select the signed-in customer's usual delivery option once the account and zones have loaded.
   useEffect(() => {
     if (!zoneId && account?.delivery_zone && zones.some(z => z.id === account.delivery_zone)) setZoneId(account.delivery_zone)
@@ -32,7 +33,7 @@ export function Checkout() {
         items: lines.map(l => ({ product_id: l.product.id, qty: l.qty })),
         customer: { name: f.name, email: f.email, phone: f.phone, zone: zoneId, address: f.address ?? '', city: f.city ?? '', notes: f.notes ?? '' },
       })
-      window.location.assign(checkout_url) // PalmPay's secure checkout page; it returns to /order when done
+      window.location.assign(checkout_url) // PalmPay's checkout page (returns to /order), or /order directly for pay on delivery
     } catch (e) {
       setError((e as Error).message)
       setSubmitting(false)
@@ -65,9 +66,11 @@ export function Checkout() {
 
       {error && <p className="form-error" role="alert">{error}</p>}
       <button className="button orange w-full" type="submit" disabled={submitting}>
-        {submitting ? 'Opening secure payment…' : <>Pay {formatKobo(total)} securely <Icon name="arrow" /></>}
+        {submitting ? (online ? 'Opening secure payment…' : 'Placing your order…') : online ? <>Pay {formatKobo(total)} securely <Icon name="arrow" /></> : <>Place order · {formatKobo(total)} <Icon name="arrow" /></>}
       </button>
-      <p className="secure mt-3"><Icon name="shield" size={15} /> You’ll pay on PalmPay’s secure checkout page, with your PalmPay app or by bank transfer.</p>
+      <p className="secure mt-3"><Icon name="shield" size={15} /> {online ? 'You’ll pay on PalmPay’s secure checkout page, with your PalmPay app or by bank transfer.'
+        : zone && !zone.needs_address ? 'You pay by cash or bank transfer when you collect your order. We’ll call to confirm.'
+        : 'You pay by cash or bank transfer when your order is delivered. We’ll call to confirm before we send it.'}</p>
     </form>
 
     <aside className="order-summary" aria-labelledby="sum-h">

@@ -9,7 +9,7 @@ Online store for Atmonsur Multiglobal Resources Ltd: retail and wholesale orderi
 | Website (`src/`) | React + Vite + Tailwind. Built into `dist/` by `npm run build`. |
 | Server (`server/src/`) | One small Node.js server ([Hono](https://hono.dev)). It serves the website, the `/api` the website uses, PalmPay payment notifications and the `/admin` pages. |
 | Database | PostgreSQL. Tables are created automatically on first start, with starter products. |
-| Payments | [PalmPay Checkout](https://docs.palmpay.com/en/pay-ins-palmpay-checkout-instruction): customers pay on PalmPay's secure page (PalmPay app or bank transfer). Payment details never touch this server. |
+| Payments | **Until PalmPay is set up:** customers order online and **pay on delivery or at pickup** (cash or transfer); you mark orders paid in admin. **Once the PalmPay keys are added:** customers pay online on [PalmPay Checkout](https://docs.palmpay.com/en/pay-ins-palmpay-checkout-instruction). It switches automatically. |
 | Product pages | Each product has its own page at `/product/<number>-<name>`, with retail and wholesale prices, a quantity picker, a description and related products. Shared links show the product's name, description and photo in WhatsApp, Facebook and Google. |
 | Customer accounts | Optional sign-up for customers: order history with delivery status, “Order again”, saved delivery details. Guests can still check out. |
 | Emails | [Resend](https://resend.com) emails you each paid order and enquiry, and sends customers their email-confirmation and password-reset links. |
@@ -45,14 +45,24 @@ How a purchase works: the customer fills the cart → checkout picks a delivery 
 8. **Tell Google about the site:** add it in [Google Search Console](https://search.google.com/search-console) and submit `https://<your-site>/sitemap.xml`. That file lists every product and updates itself.
 9. **Before launch, review** the privacy policy and terms text in `src/pages/Legal.tsx`. They're a plain-language starting point, not legal advice.
 
+## Running without PalmPay (pay on delivery)
+
+Until `PALMPAY_APP_ID` and `PALMPAY_PRIVATE_KEY` are set, the store runs in **pay-on-delivery mode**:
+- Checkout shows **Place order** instead of a payment button, and tells the customer they'll pay by cash or bank transfer on delivery or when they collect.
+- You get an email for each order ("New order … (pay on delivery)") if email is set up. Orders also appear in `/admin/orders` under **To fulfil**.
+- **Call the customer to confirm**, deliver or hand over the goods, collect payment, then open the order in admin and press **Mark as paid**.
+- The site's wording ("Pay on delivery or at pickup") follows the mode everywhere: home page, cart, checkout, product pages and footer.
+
+When your PalmPay account is approved, add the PalmPay variables and redeploy. New orders then require online payment, while orders placed earlier keep their pay-on-delivery status.
+
 ## Deploying on Vercel
 
 `vercel.json` tells Vercel to run `npm run build:vercel`. That builds the website and packs the server into one Vercel Function (`scripts/build-vercel.mjs`, using Vercel's [Build Output API](https://vercel.com/docs/build-output-api/v3)). Images and code files come from Vercel's CDN; pages, `/api`, `/admin` and payment notifications go to the function.
 
 1. **Project settings → Build and Deployment:** set *Framework Preset* to **Other**, and turn off any *Output Directory* override (e.g. `dist`). Otherwise Vercel serves only the website files and products never load, which is what an empty "Best sellers" section means.
 2. **Database:** in your Vercel project, *Storage → Create Database → Neon*. This sets `DATABASE_URL` for you. Use the **pooled** connection string (its host contains `-pooler`), because many function instances may connect at once.
-3. **Environment variables** (*Settings → Environment Variables*, Production): `SITE_URL` (e.g. `https://atmonsur.vercel.app`, no trailing slash), `ADMIN_PASSWORD`, `PALMPAY_ENV`, `PALMPAY_APP_ID`, `PALMPAY_PRIVATE_KEY`, `PALMPAY_PUBLIC_KEY`, `RESEND_API_KEY`, `OWNER_EMAIL`, `NOTIFY_FROM`, and `NODE_ENV=production`. **Redeploy** after changing them.
-4. **Check:** `https://<your-site>/api/catalogue` should show your products as JSON, and refreshing `/shop` should not give a 404.
+3. **Environment variables** (*Settings → Environment Variables*, Production). **Required:** `DATABASE_URL` (set by step 2), `SITE_URL` (e.g. `https://atmonsur.vercel.app`, no trailing slash), `ADMIN_PASSWORD` (12+ characters) and `NODE_ENV=production`. **Recommended:** `RESEND_API_KEY`, `OWNER_EMAIL` and `NOTIFY_FROM`, so you're emailed about orders. **Later:** `PALMPAY_ENV`, `PALMPAY_APP_ID`, `PALMPAY_PRIVATE_KEY` and `PALMPAY_PUBLIC_KEY` turn on online payment. Without them the store takes pay-on-delivery orders. **Redeploy** after changing variables.
+4. **Check:** `https://<your-site>/api/catalogue` should show your products as JSON, and refreshing `/shop` should not give a 404. If every page says *The store's server could not start*, the message under it names the problem, usually `DATABASE_URL`.
 5. **PalmPay IP whitelist (production only):** PalmPay only accepts production requests from whitelisted IP addresses, and Vercel functions don't have fixed outgoing IPs unless you add Vercel's paid *Static IPs* feature. Without it, use the sandbox on Vercel, and either add Static IPs or host on Render (which lists fixed outgoing IPs) before switching `PALMPAY_ENV` to `production`. Confirm with `npm run palmpay:check`.
 
 The request rate limits are counted per function instance on Vercel, so they're looser there than on a single Render server.

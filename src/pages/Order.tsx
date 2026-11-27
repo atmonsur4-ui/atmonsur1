@@ -18,8 +18,8 @@ export function Order() {
     setError('')
     api.order(reference).then(o => {
       setOrder(o)
-      // Empty the cart once per paid order, so revisiting this page later doesn't wipe a new cart.
-      if (o.status === 'paid' && localStorage.getItem('atmonsur-cleared') !== o.reference) {
+      // Empty the cart once per placed order, so revisiting this page later doesn't wipe a new cart.
+      if ((o.status === 'paid' || (o.status === 'pending' && o.payment_method === 'on_delivery')) && localStorage.getItem('atmonsur-cleared') !== o.reference) {
         clearCart()
         localStorage.setItem('atmonsur-cleared', o.reference)
       }
@@ -31,10 +31,14 @@ export function Order() {
   if (!order) return <section className="section shell checkout-empty" role="status"><h1>Checking your payment…</h1></section>
 
   const paid = order.status === 'paid'
+  const pickup = order.delivery.toLowerCase().includes('pick')
+  const payLater = order.payment_method === 'on_delivery' && order.status === 'pending'
   return <section className="section shell order-page">
-    <div className={`order-banner ${paid ? 'paid' : 'unpaid'}`} role="status">
-      {paid ? <><h1>Thank you, {order.first_name}! Your order is confirmed.</h1>
-        <p>We’ve received your payment and will call you to arrange {order.delivery.toLowerCase().includes('pick') ? 'your pickup' : 'delivery'}.</p></>
+    <div className={`order-banner ${paid || payLater ? 'paid' : 'unpaid'}`} role="status">
+      {payLater ? <><h1>Thank you, {order.first_name}! Your order has been placed.</h1>
+        <p>We’ll call you shortly to confirm it and arrange {pickup ? 'your pickup' : 'delivery'}. Please pay <b>{formatKobo(order.total_kobo)}</b> by cash or bank transfer {pickup ? 'when you collect it' : 'when it’s delivered'}.</p></>
+      : paid ? <><h1>Thank you, {order.first_name}! Your order is confirmed.</h1>
+        <p>{order.payment_method === 'on_delivery' ? 'Your payment has been received. Thank you!' : `We’ve received your payment and will call you to arrange ${pickup ? 'your pickup' : 'delivery'}.`}</p></>
         : <><h1>{order.status === 'failed' ? 'Payment could not be started' : 'We haven’t received your payment yet'}</h1>
           <p>Your cart has been kept. If you’ve just paid, wait a moment and check again.</p>
           <div className="hero-ctas"><button className="button primary" onClick={() => setChecks(c => c + 1)}>Check again</button><Link to="/checkout" className="button secondary">Back to checkout</Link></div></>}

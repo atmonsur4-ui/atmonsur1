@@ -175,7 +175,7 @@ accounts.get('/orders', signedIn, async c => {
   const items = orders.length ? await sql<OrderItemRow[]>`select * from order_items where order_id in ${sql(orders.map(o => o.id))} order by id` : []
   return c.json({
     orders: orders.map(o => ({
-      reference: o.reference, status: o.status, fulfilment: o.fulfilment, created_at: o.created_at, delivery: o.delivery_zone_name, total_kobo: o.total_kobo,
+      reference: o.reference, status: o.status, payment_method: o.payment_method, fulfilment: o.fulfilment, created_at: o.created_at, delivery: o.delivery_zone_name, total_kobo: o.total_kobo,
       items: items.filter(i => i.order_id === o.id).map(i => ({ product_id: i.product_id, name: i.name, pack: i.pack, qty: i.qty, line_total_kobo: i.line_total_kobo })),
     })),
   })

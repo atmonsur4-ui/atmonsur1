@@ -1,6 +1,6 @@
 import { Icon } from './Icon'
 import { ProductArt } from './ProductArt'
-import { formatKobo, type Product } from '../lib/api'
+import { formatKobo, type Product, type Zone } from '../lib/api'
 import { useStore } from '../lib/store'
 import { Link } from '../lib/router'
 import { productPath } from '../../server/src/slug.ts'
@@ -33,6 +33,23 @@ export function ProductCard({ product: p }: { product: Product }) {
       </div>
     </div>
   </article>
+}
+
+/** e.g. "Free pickup in Epe, or delivery from ₦1,500" */
+export function deliverySummary(zones: Zone[]) {
+  const pickup = zones.some(z => !z.needs_address && z.fee_kobo === 0)
+  const fees = zones.filter(z => z.needs_address).map(z => z.fee_kobo)
+  const delivery = fees.length ? `delivery from ${formatKobo(Math.min(...fees))}` : ''
+  const text = [pickup && 'free pickup in Epe', delivery].filter(Boolean).join(', or ')
+  return text ? text[0].toUpperCase() + text.slice(1) : ''
+}
+
+export function DeliveryOptions() {
+  const { catalogue } = useStore()
+  if (!catalogue?.zones.length) return null
+  return <ul className="delivery-options">
+    {catalogue.zones.map(z => <li key={z.id}><span>{z.name}</span><b>{z.fee_kobo ? formatKobo(z.fee_kobo) : 'Free'}</b></li>)}
+  </ul>
 }
 
 export function BuyerStrip() {

@@ -65,5 +65,5 @@ export function Footer() {
       <a className="contact-line" href={`mailto:${CONTACT.email}`}><Icon name="mail" size={17} /> <span className="break-all">{CONTACT.email}</span></a>
       <Link className="contact-line" to="/contact"><Icon name="location" size={17} /> Iraye Rd, Epe, Lagos</Link></div>
   </div>
-  <div className="shell footer-bottom"><span>© {new Date().getFullYear()} Atmonsur Multiglobal Resources Ltd.</span><span>Payments processed securely by PalmPay</span></div></footer>
+  <div className="shell footer-bottom"><span>© {new Date().getFullYear()} Atmonsur Multiglobal Resources Ltd.</span><span>{catalogue?.payments === 'palmpay' ? 'Payments processed securely by PalmPay' : 'Pay on delivery or at pickup'}</span></div></footer>
 }

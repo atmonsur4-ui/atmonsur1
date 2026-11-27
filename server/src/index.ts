@@ -7,11 +7,11 @@ import { HTTPException } from 'hono/http-exception'
 import { pageHtml, productPage, robots, sitemap } from './seo.ts'
 import { productIdFromPath } from './slug.ts'
 import { migrate, sql, type PricedRow } from './db.ts'
-import { getOrder, settleOrder, type PalmPayOrder } from './orders.ts'
+import { getOrder, notifyNewOrder, settleOrder, type PalmPayOrder } from './orders.ts'
 import { notifyOwner } from './notify.ts'
 import { lineTotal, unitPrice } from './pricing.ts'
 import { parseCheckout, parseEnquiry, REFERENCE } from './validate.ts'
-import { newReference, notificationValid, palmpay } from './palmpay.ts'
+import { newReference, notificationValid, palmpay, palmpayConfigured } from './palmpay.ts'
 import { admin } from './admin.ts'
 import { accounts, currentCustomer } from './accounts.ts'
 import { rateLimit } from './rateLimit.ts'
@@ -40,7 +40,7 @@ app.get('/api/catalogue', async c => {
     sql`select id, name, fee_kobo, needs_address from delivery_zones where active order by sort, id`,
   ])
   c.header('Cache-Control', 'public, max-age=60')
-  return c.json({ categories, products, zones })
+  return c.json({ categories, products, zones, payments: palmpayConfigured() ? 'palmpay' : 'on_delivery' })
 })
 
 // Prices and delivery fees always come from the database here, never from the browser.
@@ -63,10 +63,11 @@ app.post('/api/checkout', rateLimit(10), async c => {
   const total = subtotal + zone.fee_kobo
   const reference = newReference()
   const account = await currentCustomer(c) // null for guest checkout
+  const paymentMethod = palmpayConfigured() ? 'palmpay' : 'on_delivery'
 
   const orderId = await sql.begin(async tx => {
     const [order] = await tx`insert into orders ${tx({
-      reference, customer_id: account?.id ?? null, customer_name: customer.name, email: customer.email, phone: customer.phone,
+      reference, payment_method: paymentMethod, customer_id: account?.id ?? null, customer_name: customer.name, email: customer.email, phone: customer.phone,
       delivery_zone: zone.id, delivery_zone_name: zone.name,
       address: zone.needs_address ? customer.address : null, city: zone.needs_address ? customer.city : null, notes: customer.notes || null,
       subtotal_kobo: subtotal, delivery_fee_kobo: zone.fee_kobo, total_kobo: total,
@@ -78,6 +79,11 @@ app.post('/api/checkout', rateLimit(10), async c => {
       where id = ${account.id}`
     return order.id as number
   })
+
+  if (paymentMethod === 'on_delivery') { // no online payment yet: the order is placed now and paid on delivery or pickup
+    await notifyNewOrder((await getOrder(reference))!)
+    return c.json({ checkout_url: `/order?reference=${reference}`, reference })
+  }
 
   try {
     const data = await palmpay('/api/v2/payment/merchant/createorder', {
@@ -102,7 +108,7 @@ app.get('/api/orders/:reference', rateLimit(30), async c => {
   if (!REFERENCE.test(reference)) return c.json({ error: 'Order not found.' }, 404)
   let order = await getOrder(reference)
   if (!order) return c.json({ error: 'Order not found.' }, 404)
-  if (order.status === 'pending') {
+  if (order.status === 'pending' && order.payment_method === 'palmpay') {
     try {
       const tx: PalmPayOrder = await palmpay('/api/v2/payment/merchant/order/queryStatus', { orderId: reference })
       order = (await settleOrder({ ...tx, orderId: reference })) ?? order
@@ -112,7 +118,7 @@ app.get('/api/orders/:reference', rateLimit(30), async c => {
   }
   // Only what the confirmation page needs; the unguessable reference is the customer's key to it.
   return c.json({
-    reference: order.reference, status: order.status, first_name: order.customer_name.split(' ')[0], delivery: order.delivery_zone_name,
+    reference: order.reference, status: order.status, payment_method: order.payment_method, first_name: order.customer_name.split(' ')[0], delivery: order.delivery_zone_name,
     items: order.items.map(i => ({ name: i.name, pack: i.pack, qty: i.qty, line_total_kobo: i.line_total_kobo })),
     subtotal_kobo: order.subtotal_kobo, delivery_fee_kobo: order.delivery_fee_kobo, total_kobo: order.total_kobo,
   })
