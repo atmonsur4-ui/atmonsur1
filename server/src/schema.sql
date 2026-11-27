@@ -50,7 +50,7 @@ create table if not exists orders (
   subtotal_kobo int not null,
   delivery_fee_kobo int not null,
   total_kobo int not null,
-  paystack_transaction_id text,
+  payment_reference text,                 -- PalmPay's order number (orderNo)
   created_at timestamptz not null default now(),
   paid_at timestamptz
 );
@@ -78,4 +78,45 @@ create table if not exists enquiries (
 );
 
 create index if not exists orders_created_at on orders (created_at desc);
+
+-- Databases created while the store used Paystack: rename the payment column.
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'orders' and column_name = 'paystack_transaction_id') then
+    alter table orders rename column paystack_transaction_id to payment_reference;
+  end if;
+end $$;
 create index if not exists order_items_order on order_items (order_id);
+
+-- Customer accounts (optional: guests can still check out).
+create table if not exists customers (
+  id int generated always as identity primary key,
+  email text not null unique,             -- stored lowercase
+  name text not null,
+  phone text not null,
+  password_hash text not null,            -- scrypt, see passwords.ts
+  email_verified_at timestamptz,
+  address text,
+  city text,
+  delivery_zone text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists sessions (
+  token_hash text primary key,            -- sha256 of the cookie value; the raw token is never stored
+  customer_id int not null references customers (id) on delete cascade,
+  expires_at timestamptz not null
+);
+
+create table if not exists email_tokens (
+  token_hash text primary key,            -- sha256 of the emailed token
+  customer_id int not null references customers (id) on delete cascade,
+  purpose text not null check (purpose in ('verify', 'reset')),
+  expires_at timestamptz not null
+);
+
+alter table orders add column if not exists customer_id int references customers (id) on delete set null;
+create index if not exists orders_customer on orders (customer_id, created_at desc);
+create index if not exists sessions_customer on sessions (customer_id);
+
+-- Product pages: optional longer text shown on the product's own page.
+alter table products add column if not exists description text;

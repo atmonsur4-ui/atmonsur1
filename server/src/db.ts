@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 
 if (!process.env.DATABASE_URL) throw new Error('Set DATABASE_URL (see .env.example)')
 
-export const sql = postgres(process.env.DATABASE_URL, { max: 5 })
+export const sql = postgres(process.env.DATABASE_URL, { max: 5, onnotice: () => {} }) // hide "already exists, skipping" notices from migrate()
 
 /** Creates tables if missing and adds starter data to an empty database. */
 export async function migrate() {
@@ -36,11 +36,11 @@ export async function migrate() {
 }
 
 export type OrderRow = {
-  id: number; reference: string; status: 'pending' | 'paid' | 'failed'; fulfilment: string
+  id: number; reference: string; status: 'pending' | 'paid' | 'failed'; fulfilment: string; customer_id: number | null
   customer_name: string; email: string; phone: string; delivery_zone: string; delivery_zone_name: string
   address: string | null; city: string | null; notes: string | null
   subtotal_kobo: number; delivery_fee_kobo: number; total_kobo: number
-  paystack_transaction_id: string | null; created_at: Date; paid_at: Date | null
+  payment_reference: string | null; created_at: Date; paid_at: Date | null
 }
 export type OrderItemRow = { id: number; order_id: number; product_id: number | null; name: string; pack: string; qty: number; unit_price_kobo: number; line_total_kobo: number }
 export type PricedRow = { id: number; name: string; pack: string; price_kobo: number; bulk_price_kobo: number; bulk_min_qty: number }

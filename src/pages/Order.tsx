@@ -4,11 +4,11 @@ import { api, CONTACT, formatKobo, type OrderSummary } from '../lib/api'
 import { Link, useLocation } from '../lib/router'
 import { useStore } from '../lib/store'
 
-// Paystack sends the customer back here: /order?reference=ATM-...
+// PalmPay sends the customer back here (our callBackUrl): /order?reference=ATM...
 export function Order() {
   const { query } = useLocation()
-  const reference = query.get('reference') ?? query.get('trxref') ?? ''
-  const { clearCart } = useStore()
+  const reference = query.get('reference') ?? ''
+  const { clearCart, account } = useStore()
   const [order, setOrder] = useState<OrderSummary | null>(null)
   const [error, setError] = useState('')
   const [checks, setChecks] = useState(0)
@@ -34,7 +34,7 @@ export function Order() {
   return <section className="section shell order-page">
     <div className={`order-banner ${paid ? 'paid' : 'unpaid'}`} role="status">
       {paid ? <><h1>Thank you, {order.first_name}! Your order is confirmed.</h1>
-        <p>We’ve received your payment and will call you to arrange {order.delivery.toLowerCase().includes('pick') ? 'your pickup' : 'delivery'}. Paystack has emailed you a receipt.</p></>
+        <p>We’ve received your payment and will call you to arrange {order.delivery.toLowerCase().includes('pick') ? 'your pickup' : 'delivery'}.</p></>
         : <><h1>{order.status === 'failed' ? 'Payment could not be started' : 'We haven’t received your payment yet'}</h1>
           <p>Your cart has been kept. If you’ve just paid, wait a moment and check again.</p>
           <div className="hero-ctas"><button className="button primary" onClick={() => setChecks(c => c + 1)}>Check again</button><Link to="/checkout" className="button secondary">Back to checkout</Link></div></>}
@@ -47,6 +47,7 @@ export function Order() {
       <div className="sum-line"><span>{order.delivery}</span><b>{order.delivery_fee_kobo ? formatKobo(order.delivery_fee_kobo) : 'Free'}</b></div>
       <div className="sum-line total"><span>Total</span><b>{formatKobo(order.total_kobo)}</b></div>
     </div>
-    <p><Link to="/shop" className="text-link">Continue shopping <Icon name="arrow" size={17} /></Link></p>
+    <p className="flex gap-6 flex-wrap"><Link to="/shop" className="text-link">Continue shopping <Icon name="arrow" size={17} /></Link>
+      {account ? <Link to="/account" className="text-link">All your orders</Link> : paid && <Link to="/account?mode=signup" className="text-link">Create an account to track future orders</Link>}</p>
   </section>
 }

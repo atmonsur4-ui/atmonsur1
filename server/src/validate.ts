@@ -6,6 +6,41 @@ const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 const PHONE = /^\+?[0-9 ()-]{7,20}$/
 
+// ---- Customer accounts ----
+
+/** Passwords are not trimmed (spaces are allowed); 8–200 characters. */
+export function checkPassword(v: unknown): string | null {
+  if (typeof v !== 'string' || v.length < 8) return 'Password must be at least 8 characters.'
+  if (v.length > 200) return 'Password is too long.'
+  return null
+}
+
+export type SignupInput = { name: string; email: string; phone: string; password: string }
+
+export function parseSignup(body: unknown): Result<SignupInput> {
+  const b = (body ?? {}) as Record<string, unknown>
+  const v = { name: str(b.name, 100), email: str(b.email, 200).toLowerCase(), phone: str(b.phone, 20), password: typeof b.password === 'string' ? b.password : '' }
+  if (v.name.length < 2 || v.name.length > 100) return { ok: false, error: 'Please enter your full name.' }
+  if (!EMAIL.test(v.email) || v.email.length > 200) return { ok: false, error: 'Please enter a valid email address.' }
+  if (!PHONE.test(v.phone)) return { ok: false, error: 'Please enter a valid phone number.' }
+  const pw = checkPassword(v.password)
+  if (pw) return { ok: false, error: pw }
+  return { ok: true, value: v }
+}
+
+export type ProfileInput = { name: string; phone: string; address: string | null; city: string | null; delivery_zone: string | null }
+
+export function parseProfile(body: unknown): Result<ProfileInput> {
+  const b = (body ?? {}) as Record<string, unknown>
+  const v = { name: str(b.name, 100), phone: str(b.phone, 20), address: str(b.address, 300) || null, city: str(b.city, 100) || null, delivery_zone: str(b.delivery_zone, 40) || null }
+  if (v.name.length < 2 || v.name.length > 100) return { ok: false, error: 'Please enter your full name.' }
+  if (!PHONE.test(v.phone)) return { ok: false, error: 'Please enter a valid phone number.' }
+  if ((v.address?.length ?? 0) > 300 || (v.city?.length ?? 0) > 100) return { ok: false, error: 'Address is too long.' }
+  return { ok: true, value: v }
+}
+
+export const normaliseEmail = (v: unknown) => str(v, 200).toLowerCase()
+
 export type CheckoutInput = {
   items: { product_id: number; qty: number }[]
   customer: { name: string; email: string; phone: string; zone: string; address: string; city: string; notes: string }
@@ -50,7 +85,7 @@ export function parseEnquiry(body: unknown): Result<EnquiryInput> & { spam?: boo
   return { ok: true, value: v }
 }
 
-export const REFERENCE = /^ATM-[A-Z0-9]{6,12}-[a-f0-9]{16}$/
+export const REFERENCE = /^ATM[A-Z0-9]{6,12}[a-f0-9]{16}$/ // see newReference in palmpay.ts
 
 // ---- Admin forms (values arrive as strings from HTML forms) ----
 
@@ -63,7 +98,7 @@ const COLOR = /^#[0-9a-fA-F]{6}$/
 
 export type ProductForm = {
   name: string; category: string; pack: string; price_kobo: number; bulk_price_kobo: number; bulk_min_qty: number
-  badge: string | null; image_url: string | null; art_kind: string; color: string; active: boolean; sort: number
+  badge: string | null; image_url: string | null; art_kind: string; color: string; active: boolean; sort: number; description: string | null
 }
 
 export function parseProductForm(f: Record<string, unknown>): Result<ProductForm> {
@@ -72,6 +107,7 @@ export function parseProductForm(f: Record<string, unknown>): Result<ProductForm
     price_kobo: nairaToKobo(f.price), bulk_price_kobo: nairaToKobo(f.bulk_price), bulk_min_qty: Number(f.bulk_min_qty),
     badge: str(f.badge, 30) || null, image_url: str(f.image_url, 500) || null,
     art_kind: str(f.art_kind, 20), color: str(f.color, 7), active: f.active === 'on', sort: Number(f.sort || 0),
+    description: str(f.description, 2000) || null,
   }
   if (!v.name || v.name.length > 120) return { ok: false, error: 'Name is required (up to 120 characters).' }
   if (!v.category) return { ok: false, error: 'Choose a category.' }
@@ -83,6 +119,7 @@ export function parseProductForm(f: Record<string, unknown>): Result<ProductForm
   if (!ART.includes(v.art_kind)) return { ok: false, error: 'Choose an illustration.' }
   if (!COLOR.test(v.color)) return { ok: false, error: 'Colour must look like #3796df.' }
   if (!Number.isInteger(v.sort)) return { ok: false, error: 'Order must be a whole number.' }
+  if ((v.description?.length ?? 0) > 2000) return { ok: false, error: 'Description is too long (up to 2000 characters).' }
   return { ok: true, value: v }
 }
 

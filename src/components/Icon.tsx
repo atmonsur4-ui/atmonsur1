@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 
-export type IconName = 'search' | 'cart' | 'menu' | 'arrow' | 'truck' | 'shield' | 'chevron' | 'minus' | 'plus' | 'close' | 'trash' | 'phone' | 'mail' | 'location'
+export type IconName = 'search' | 'user' | 'cart' | 'menu' | 'arrow' | 'truck' | 'shield' | 'chevron' | 'minus' | 'plus' | 'close' | 'trash' | 'phone' | 'mail' | 'location'
 
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
     search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
+    user: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
     cart: <><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20 7H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></>,
     menu: <><path d="M4 7h16M4 12h16M4 17h16"/></>,
     arrow: <><path d="M5 12h14M14 7l5 5-5 5"/></>,

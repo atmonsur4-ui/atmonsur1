@@ -2,6 +2,8 @@ import { Icon } from './Icon'
 import { ProductArt } from './ProductArt'
 import { formatKobo, type Product } from '../lib/api'
 import { useStore } from '../lib/store'
+import { Link } from '../lib/router'
+import { productPath } from '../../server/src/slug.ts'
 
 export function ProductImage({ product, className }: { product: Product; className?: string }) {
   return product.image_url
@@ -15,12 +17,12 @@ export function ProductCard({ product: p }: { product: Product }) {
   return <article className="product-card">
     <div className="product-image">
       {p.badge && <span className="badge">{p.badge}</span>}
-      <ProductImage product={p} />
+      <Link to={productPath(p)} className="product-image-link" tabIndex={-1} aria-hidden="true"><ProductImage product={p} /></Link>
       <button className="quick-add" onClick={() => add(p)} aria-label={`Add ${p.name} to cart`}><Icon name="plus" /></button>
     </div>
     <div className="product-info">
       <span className="product-category">{p.category}</span>
-      <h3>{p.name}</h3>
+      <h3><Link to={productPath(p)} className="product-link">{p.name}</Link></h3>
       <p>{p.pack}</p>
       <div className="price-row">
         <div>

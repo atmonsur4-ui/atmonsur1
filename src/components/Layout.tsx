@@ -13,7 +13,7 @@ function Brand({ inverted = false }: { inverted?: boolean }) {
 
 export function Header() {
   const { path, query } = useLocation()
-  const { count, setCartOpen } = useStore()
+  const { count, setCartOpen, account } = useStore()
   const [menuOpen, setMenuOpen] = useState(false)
   const [search, setSearch] = useState(query.get('q') ?? '')
   useEffect(() => setMenuOpen(false), [path])
@@ -36,6 +36,7 @@ export function Header() {
           {nav.map(([to, label]) => <Link key={to} to={to} aria-current={path === to ? 'page' : undefined} className={path === to ? 'active' : ''}>{label}</Link>)}
         </nav>
         <div className="header-actions">
+          <Link to="/account" className="account-btn" aria-current={path.startsWith('/account') ? 'page' : undefined}><Icon name="user" /><span>{account ? account.name.split(' ')[0] : 'Account'}</span></Link>
           <button className="cart-btn" onClick={() => setCartOpen(true)} aria-label={`Cart, ${count} ${count === 1 ? 'pack' : 'packs'}`}>
             <Icon name="cart" /><span>Cart</span>{count > 0 && <b aria-hidden="true">{count}</b>}
           </button>
@@ -64,5 +65,5 @@ export function Footer() {
       <a className="contact-line" href={`mailto:${CONTACT.email}`}><Icon name="mail" size={17} /> <span className="break-all">{CONTACT.email}</span></a>
       <Link className="contact-line" to="/contact"><Icon name="location" size={17} /> Iraye Rd, Epe, Lagos</Link></div>
   </div>
-  <div className="shell footer-bottom"><span>© {new Date().getFullYear()} Atmonsur Multiglobal Resources Ltd.</span><span>Payments processed securely by Paystack</span></div></footer>
+  <div className="shell footer-bottom"><span>© {new Date().getFullYear()} Atmonsur Multiglobal Resources Ltd.</span><span>Payments processed securely by PalmPay</span></div></footer>
 }

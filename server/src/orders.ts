@@ -1,14 +1,6 @@
 import { sql, type OrderItemRow, type OrderRow } from './db.ts'
 import { notifyOwner, naira } from './notify.ts'
-
-export async function paystack(path: string, init?: RequestInit) {
-  const key = process.env.PAYSTACK_SECRET_KEY
-  if (!key) throw new Error('Set PAYSTACK_SECRET_KEY')
-  const res = await fetch(`https://api.paystack.co${path}`, { ...init, headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' } })
-  const body = await res.json().catch(() => ({}))
-  if (!res.ok || !body.status) throw new Error(`Paystack ${path} failed: ${res.status} ${body.message ?? ''}`)
-  return body.data
-}
+import { ORDER_STATUS } from './palmpay.ts'
 
 export async function getOrder(reference: string) {
   const [order] = await sql<OrderRow[]>`select * from orders where reference = ${reference}`
@@ -17,21 +9,22 @@ export async function getOrder(reference: string) {
   return { ...order, items }
 }
 
-type PaystackTx = { id: number; status: string; amount: number; currency: string; reference: string }
+/** A PalmPay order as returned by the query API or sent in a payment notification (field names as PalmPay spells them). */
+export type PalmPayOrder = { orderId: string; orderNo?: string; orderStatus: number; amount: number; currency: string }
 
 /**
- * Marks an order paid if Paystack's transaction matches it exactly. Called by both the webhook and the
- * order page; the `status = 'pending'` guard makes it happen once, so the owner is emailed once.
+ * Marks an order paid if PalmPay reports it paid (orderStatus 2) for exactly the right amount. Called by both the
+ * notification and the order page; the `status = 'pending'` guard makes it happen once, so the owner is emailed once.
  */
-export async function settleOrder(tx: PaystackTx) {
-  const order = await getOrder(tx.reference)
-  if (!order || order.status !== 'pending' || tx.status !== 'success') return order
-  if (tx.amount !== order.total_kobo || tx.currency !== 'NGN') {
-    console.error(`Amount mismatch on ${tx.reference}: paid ${tx.amount} ${tx.currency}, expected ${order.total_kobo} NGN`)
-    await notifyOwner(`CHECK PAYMENT: amount mismatch on order ${tx.reference}`, `Paystack reports ${tx.amount / 100} ${tx.currency}; order total is ${naira(order.total_kobo)}. The order was left unpaid.`)
+export async function settleOrder(tx: PalmPayOrder) {
+  const order = await getOrder(tx.orderId)
+  if (!order || order.status !== 'pending' || Number(tx.orderStatus) !== ORDER_STATUS.success) return order
+  if (Number(tx.amount) !== order.total_kobo || tx.currency !== 'NGN') {
+    console.error(`Amount mismatch on ${tx.orderId}: paid ${tx.amount} ${tx.currency}, expected ${order.total_kobo} NGN`)
+    await notifyOwner(`CHECK PAYMENT: amount mismatch on order ${tx.orderId}`, `PalmPay reports ${Number(tx.amount) / 100} ${tx.currency}; order total is ${naira(order.total_kobo)}. The order was left unpaid.`)
     return order
   }
-  const updated = await sql`update orders set status = 'paid', paid_at = now(), paystack_transaction_id = ${String(tx.id)}
+  const updated = await sql`update orders set status = 'paid', paid_at = now(), payment_reference = ${tx.orderNo ?? null}
     where id = ${order.id} and status = 'pending' returning id`
   if (updated.length) {
     await notifyOwner(`New paid order ${order.reference}: ${naira(order.total_kobo)}`, [

@@ -43,7 +43,7 @@ const page = (title: string, body: unknown, notice = '') => html`<!doctype html>
   .notice{padding:10px 14px;border-radius:6px;margin-bottom:16px;background:#dff4e8;color:#13633f}.notice.error{background:#fde2e2;color:#9b1c1c}
   .filters a{margin-right:14px}.inline{display:flex;gap:8px;align-items:center}.inline select{width:auto}.inline button{margin:0}
 </style></head><body>
-<header><b>Atmonsur admin</b><a href="/admin/orders">Orders</a><a href="/admin/products">Products</a><a href="/admin/categories">Categories</a><a href="/admin/delivery">Delivery fees</a><a href="/admin/enquiries">Enquiries</a><a href="/" target="_blank">View shop ↗</a></header>
+<header><b>Atmonsur admin</b><a href="/admin/orders">Orders</a><a href="/admin/products">Products</a><a href="/admin/categories">Categories</a><a href="/admin/delivery">Delivery fees</a><a href="/admin/enquiries">Enquiries</a><a href="/admin/customers">Customers</a><a href="/" target="_blank">View shop ↗</a></header>
 <main>${notice ? html`<p class="notice ${notice.startsWith('Error') ? 'error' : ''}" role="status">${notice}</p>` : ''}<h1>${title}</h1>${body}</main></body></html>`
 
 const back = (path: string, msg: string) => `${path}${path.includes('?') ? '&' : '?'}msg=${encodeURIComponent(msg)}`
@@ -68,8 +68,8 @@ admin.get('/orders/:reference', async c => {
   const o = await getOrder(c.req.param('reference'))
   if (!o) return c.html(page('Order not found', html`<a href="/admin/orders">Back to orders</a>`), 404)
   return c.html(page(`Order ${o.reference}`, html`
-    <div class="card"><p><span class="pill ${o.status}">Payment: ${o.status}</span> ${o.paid_at ? html`<span class="muted">paid ${when(o.paid_at)} · Paystack transaction ${o.paystack_transaction_id}</span>` : ''}</p>
-    <p><b>${o.customer_name}</b><br><a href="tel:${o.phone}">${o.phone}</a> · <a href="mailto:${o.email}">${o.email}</a></p>
+    <div class="card"><p><span class="pill ${o.status}">Payment: ${o.status}</span> ${o.paid_at ? html`<span class="muted">paid ${when(o.paid_at)} · PalmPay order ${o.payment_reference}</span>` : ''}</p>
+    <p><b>${o.customer_name}</b> <span class="pill">${o.customer_id ? 'account' : 'guest'}</span><br><a href="tel:${o.phone}">${o.phone}</a> · <a href="mailto:${o.email}">${o.email}</a></p>
     <p><b>${o.delivery_zone_name}</b>${o.address ? html`<br>${o.address}, ${o.city}` : ''}</p>${o.notes ? html`<p><b>Notes:</b> ${o.notes}</p>` : ''}
     <p class="muted">Placed ${when(o.created_at)}</p></div>
     <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>
@@ -78,7 +78,7 @@ admin.get('/orders/:reference', async c => {
     <tr><th colspan="3">Total</th><th>${naira(o.total_kobo)}</th></tr></tbody></table>
     <form class="card" method="post" action="/admin/orders/${o.reference}/fulfilment" style="margin-top:16px"><label for="f">Fulfilment</label>
       <div class="inline"><select id="f" name="fulfilment">${['new', 'dispatched', 'delivered', 'cancelled'].map(f => html`<option ${f === o.fulfilment ? 'selected' : ''}>${f}</option>`)}</select><button>Save</button></div>
-      ${o.status === 'paid' ? html`<p class="muted">Cancelling here does not refund the customer. Refund paid orders from your Paystack dashboard.</p>` : ''}</form>
+      ${o.status === 'paid' ? html`<p class="muted">Cancelling here does not refund the customer. Refund paid orders from your PalmPay merchant dashboard.</p>` : ''}</form>
     <p><a href="/admin/orders">← All orders</a></p>`, c.req.query('msg')))
 })
 
@@ -113,6 +113,7 @@ const productForm = async (p: Record<string, any> | null, error = '') => {
         <div><label for="bulk_min_qty">Wholesale from (packs)</label><input id="bulk_min_qty" name="bulk_min_qty" type="number" min="1" required value="${v.bulk_min_qty}"></div></div>
       <div class="row"><div><label for="badge">Badge (optional)</label><input id="badge" name="badge" maxlength="30" value="${v.badge ?? ''}" placeholder="Bestseller"></div>
         <div><label for="sort">Order on site</label><input id="sort" name="sort" type="number" value="${v.sort}"></div></div>
+      <label for="description">Description for the product page (optional)</label><textarea id="description" name="description" rows="4" maxlength="2000" placeholder="What it is, brand, ingredients or uses, storage, carton contents…">${v.description ?? ''}</textarea>
       <label for="image_url">Photo link (optional, https://…)</label><input id="image_url" name="image_url" maxlength="500" value="${v.image_url ?? ''}">
       <div class="row"><div><label for="art_kind">Illustration if no photo</label><select id="art_kind" name="art_kind">${ART.map(a => html`<option ${a === v.art_kind ? 'selected' : ''}>${a}</option>`)}</select></div>
         <div><label for="color">Illustration colour</label><input id="color" name="color" type="color" value="${v.color}"></div></div>
@@ -175,6 +176,19 @@ admin.post('/delivery', async c => {
   const v = parsed.value
   await sql`insert into delivery_zones ${sql(v)} on conflict (id) do update set name = ${v.name}, fee_kobo = ${v.fee_kobo}, needs_address = ${v.needs_address}, active = ${v.active}, sort = ${v.sort}`
   return c.redirect(back('/admin/delivery', `Saved ${v.name}`))
+})
+
+// ---- Customers (accounts). Passwords are never shown; customers reset their own. ----
+admin.get('/customers', async c => {
+  const rows = await sql`select c.id, c.name, c.email, c.phone, c.email_verified_at, c.created_at,
+      count(o.id) filter (where o.status = 'paid')::int as paid_orders,
+      coalesce(sum(o.total_kobo) filter (where o.status = 'paid'), 0)::int as paid_total
+    from customers c left join orders o on o.customer_id = c.id group by c.id order by c.created_at desc limit 500`
+  return c.html(page('Customers', html`<p class="muted">Customers who created an account. Guests who checked out without one appear only on their orders.</p>
+    <table><thead><tr><th>Customer</th><th>Joined</th><th>Email confirmed</th><th>Paid orders</th><th>Total spent</th></tr></thead><tbody>
+    ${rows.length ? rows.map(r => html`<tr><td>${r.name}<br><span class="muted"><a href="mailto:${r.email}">${r.email}</a> · <a href="tel:${r.phone}">${r.phone}</a></span></td><td>${when(r.created_at)}</td><td>${r.email_verified_at ? 'Yes' : 'Not yet'}</td><td>${r.paid_orders}</td><td>${naira(r.paid_total)}</td></tr>`)
+      : html`<tr><td colspan="5" class="muted">No accounts yet.</td></tr>`}
+    </tbody></table>`))
 })
 
 // ---- Enquiries ----

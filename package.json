@@ -11,7 +11,8 @@
     "dev:server": "node --env-file-if-exists=.env --watch server/src/index.ts",
     "build": "tsc --noEmit && vite build",
     "start": "node --env-file-if-exists=.env server/src/index.ts",
-    "test": "node --test server/src/*.test.ts"
+    "test": "node --test server/src/*.test.ts",
+    "palmpay:check": "node --env-file-if-exists=.env server/src/palmpay-check.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",

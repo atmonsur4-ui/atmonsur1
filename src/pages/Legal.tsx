@@ -7,13 +7,13 @@ export const legalPages = {
     title: 'Privacy policy',
     sections: [
       ['Who we are', `Atmonsur Multiglobal Resources Ltd, ${CONTACT.address}. Contact us about your data at ${CONTACT.email} or ${CONTACT.phone}.`],
-      ['What we collect', 'When you place an order we collect your name, email address, phone number, delivery address and order details. When you send an enquiry we collect your name, phone number, email address and message. We do not offer customer accounts.'],
-      ['Payments', 'Payments are processed by Paystack. Your card or bank details are entered on Paystack’s secure page and are never sent to or stored by us.'],
+      ['What we collect', 'When you place an order we collect your name, email address, phone number, delivery address and order details. When you send an enquiry we collect your name, phone number, email address and message. If you create an account we also keep your saved delivery details and your order history. Passwords are stored only in a securely scrambled (hashed) form that we cannot read.'],
+      ['Payments', 'Payments are processed by PalmPay. You pay on PalmPay’s secure checkout page, and your wallet, bank or card details are never sent to or stored by us.'],
       ['How we use it', 'We use your details only to process, deliver and support your order, answer your enquiries, and keep the records the law requires. We do not sell your information or use it for marketing without your permission.'],
-      ['Who we share it with', 'Paystack (payment processing), our email provider (to notify our team of new orders and enquiries), and delivery partners where needed to deliver your order. The map on our contact page is provided by Google Maps.'],
-      ['On your device', 'Your cart and price view are saved in your browser’s local storage so they survive a page refresh. We do not use advertising or tracking cookies.'],
+      ['Who we share it with', 'PalmPay (payment processing), our email provider (to notify our team of new orders and enquiries), and delivery partners where needed to deliver your order. The map on our contact page is provided by Google Maps.'],
+      ['On your device', 'If you log in, we set one cookie that keeps you signed in for up to 30 days; logging out removes it. Your cart and price view are saved in your browser’s local storage so they survive a page refresh. We do not use advertising or tracking cookies.'],
       ['How long we keep it', 'We keep order records for as long as needed for accounting and legal purposes, and enquiries for as long as needed to deal with them.'],
-      ['Your rights', `Under Nigeria’s data protection law you can ask to see, correct or delete the personal information we hold about you. Email ${CONTACT.email} or call ${CONTACT.phone}.`],
+      ['Your rights', `Under Nigeria’s data protection law you can ask to see, correct or delete the personal information we hold about you, including closing your account. You can update your details yourself on your account page, or email ${CONTACT.email} or call ${CONTACT.phone}.`],
     ],
   },
   '/terms': {
@@ -21,9 +21,9 @@ export const legalPages = {
     sections: [
       ['Prices', 'Prices are shown in naira and include the product only. Wholesale prices apply automatically when you order at least the minimum quantity shown for that product. We may change prices at any time, but the price you pay is the one shown at checkout.'],
       ['Delivery', 'Delivery fees are shown at checkout before you pay. Free pickup is available from our Epe store. After payment we contact you by phone to arrange delivery or pickup.'],
-      ['Payment and confirmation', 'You pay through Paystack by card, bank transfer or USSD. Your order is confirmed once payment succeeds and you receive an order reference.'],
+      ['Payment and confirmation', 'You pay through PalmPay’s secure checkout. Your order is confirmed once payment succeeds and you receive an order reference.'],
       ['Availability', 'If an item you paid for turns out to be unavailable, we will contact you to offer a replacement or refund that item.'],
-      ['Problems with your order', `If something is missing, damaged or wrong, contact us as soon as possible on ${CONTACT.care} or ${CONTACT.email}. Any agreed refund is paid back through Paystack to your original payment method.`],
+      ['Problems with your order', `If something is missing, damaged or wrong, contact us as soon as possible on ${CONTACT.care} or ${CONTACT.email}. Any agreed refund is paid back through PalmPay to your original payment method.`],
     ],
   },
 } satisfies Record<string, { title: string; sections: [string, string][] }>

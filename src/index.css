@@ -58,3 +58,41 @@ main:focus{outline:none}.honeypot{position:absolute;left:-9999px;width:1px;heigh
 /* Legal pages */
 .legal{max-width:780px}.legal>div{margin-bottom:28px}.legal h2{font-size:22px;color:var(--navy);margin-bottom:8px}.legal p{line-height:1.7;color:#40506a}
 @media(max-width:900px){.checkout-layout{grid-template-columns:1fr}.order-summary{position:static}}
+/* Accounts */
+.account-btn{display:flex;align-items:center;gap:7px;color:var(--navy);font-size:13px;font-weight:600;padding:10px;border-radius:8px}.account-btn:hover{background:#f2f5f9}
+.account-layout{display:grid;grid-template-columns:1.3fr .7fr;gap:40px;align-items:start}
+.account-layout>.account-card:only-child{grid-column:1/-1;max-width:520px;margin:0 auto;width:100%}
+.account-card{background:#fff;border:1px solid #e3e8ee;border-radius:12px;padding:28px}
+.account-aside{display:grid;gap:20px}.account-aside h2,.account-main h2{font:800 22px 'Manrope Variable',sans-serif;color:var(--navy);margin-bottom:12px}
+.account-aside .enquiry-form h2{font-size:18px}.account-links{margin-top:14px}
+.tabs{display:flex;background:#f1f4f7;padding:4px;border-radius:8px;margin-bottom:20px}.tabs button{flex:1;padding:10px;border-radius:6px;font-weight:700;font-size:13px;color:#5b6879}.tabs button.active{background:#fff;color:var(--navy);box-shadow:0 1px 3px #0b214420}
+.tick-list{display:grid;gap:10px;margin-bottom:14px}.tick-list li{padding-left:26px;position:relative;font-size:14px;color:#40506a}.tick-list li:before{content:'✓';position:absolute;left:0;color:#13633f;font-weight:800}
+.order-list{display:grid;gap:12px}.order-card{background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px}
+.order-card-head,.order-card-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.order-card-head>div{display:flex;flex-direction:column}
+.order-items{font-size:13px;color:#40506a;margin:10px 0 14px;line-height:1.5}.order-card-foot>span{display:flex;align-items:center;gap:16px}
+.button.small{min-height:38px;padding:0 14px;font-size:13px}
+.pill{display:inline-block;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700;background:#e8ecf1;color:#40506a}
+.pill.new{background:#fff1d6;color:#7a4b00}.pill.dispatched{background:#e1ecff;color:#173f8a}.pill.delivered{background:#dff4e8;color:#13633f}.pill.cancelled,.pill.pending{background:#fde2e2;color:#9b1c1c}
+@media(max-width:900px){.account-layout{grid-template-columns:1fr}}
+@media(max-width:600px){.account-btn span{display:none}}
+.contact-hero>.shell{position:relative;z-index:1} /* keep heading text above the decorative circle on small screens */
+/* Product pages */
+.product-link{color:inherit}.product-link:hover{color:var(--orange-ink);text-decoration:underline}
+.product-image-link{display:grid;place-items:center;width:100%;height:100%}
+.cart-name{font-size:12px;font-weight:700;color:var(--navy);text-align:left}.cart-name:hover{text-decoration:underline}
+.product-detail{padding-top:36px}.breadcrumb{display:flex;gap:8px;flex-wrap:wrap;font-size:13px;color:#5b6879;margin-bottom:24px}.breadcrumb a{color:var(--navy);font-weight:600}.breadcrumb a:hover{text-decoration:underline}
+.product-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start}
+.product-detail-image{position:relative;background:#f4f6f8;border-radius:14px;aspect-ratio:1;display:grid;place-items:center;overflow:hidden}
+.product-detail-image .product-art{width:70%;height:auto}.product-detail-image .product-photo{padding:28px}
+.product-detail h1{font:800 36px/1.15 'Manrope Variable',sans-serif;color:var(--navy);letter-spacing:-.03em;margin:8px 0 6px}
+.product-detail .pack{color:#5b6879;font-size:15px;margin-bottom:22px}
+.price-tiers{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px}
+.tier{border:1px solid #dce2e9;border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:2px}.tier.active{border-color:var(--navy);background:#f3f6fa;box-shadow:inset 0 0 0 1px var(--navy)}
+.tier small{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#5b6879}.tier b{font:800 24px 'Manrope Variable',sans-serif;color:var(--navy)}.tier span{font-size:13px;color:#5b6879}
+.buy-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}.qty-lg{margin:0;border-radius:7px}.qty-lg input{width:56px;font-size:15px;font-weight:700}.qty-lg button{padding:0 14px;align-self:stretch}
+.buy-row .button{flex:1;min-width:220px}
+.product-description{margin:24px 0 8px;color:#40506a;line-height:1.7}.product-description p+p{margin-top:12px}
+.product-facts{margin:20px 0;border-top:1px solid #e3e8ee}.product-facts>div{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid #e3e8ee;font-size:14px}
+.product-facts dt{color:#5b6879}.product-facts dd{font-weight:600;color:var(--navy);text-align:right}
+@media(max-width:900px){.product-detail-grid{grid-template-columns:1fr;gap:28px}.product-detail-image{aspect-ratio:4/3}}
+@media(max-width:600px){.product-detail h1{font-size:28px}.price-tiers{grid-template-columns:1fr 1fr}.tier b{font-size:20px}.buy-row .button{min-width:0;width:100%}}

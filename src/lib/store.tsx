@@ -1,6 +1,6 @@
-// Catalogue (from the server), cart and buyer mode (saved in the browser so a refresh keeps them).
+// Catalogue (from the server), signed-in account, cart and buyer mode (saved in the browser so a refresh keeps them).
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { api, type Catalogue, type Product } from './api'
+import { accountApi, api, type Account, type Catalogue, type Product } from './api'
 import { lineTotal, unitPrice } from '../../server/src/pricing.ts'
 
 type Buyer = 'retail' | 'bulk'
@@ -16,11 +16,18 @@ type Store = {
   count: number
   subtotal: number
   add: (p: Product) => void
+  /** Adds a chosen quantity (product page). */
+  addQty: (p: Product, qty: number) => void
   setQty: (id: number, qty: number) => void
   clearCart: () => void
   cartOpen: boolean
   setCartOpen: (open: boolean) => void
   announce: string
+  account: Account | null
+  accountLoaded: boolean
+  setAccount: (a: Account | null) => void
+  /** Adds quantities from a past order; returns the names of items no longer sold. */
+  reorder: (items: { product_id: number | null; name: string; qty: number }[]) => string[]
 }
 
 const StoreContext = createContext<Store | null>(null)
@@ -45,6 +52,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = usePersisted<Record<number, number>>('atmonsur-cart', {})
   const [cartOpen, setCartOpen] = useState(false)
   const [announce, setAnnounce] = useState('')
+  const [account, setAccount] = useState<Account | null>(null)
+  const [accountLoaded, setAccountLoaded] = useState(false)
+
+  useEffect(() => {
+    accountApi.me().then(r => setAccount(r.customer), () => {}).finally(() => setAccountLoaded(true))
+  }, [])
 
   useEffect(() => {
     setCatalogueError('')
@@ -69,13 +82,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return { ...c, [p.id]: qty }
   }), [buyer, setCart])
 
+  const addQty = useCallback((p: Product, qty: number) => setCart(c => {
+    const total = Math.min(9999, (c[p.id] ?? 0) + Math.max(1, Math.floor(qty)))
+    setAnnounce(`${p.name} added to cart. Quantity ${total}.`)
+    return { ...c, [p.id]: total }
+  }), [setCart])
+
   const value: Store = {
     catalogue, catalogueError, retry: () => setAttempt(a => a + 1),
     buyer, setBuyer, lines,
     count: lines.reduce((s, l) => s + l.qty, 0),
     subtotal: lines.reduce((s, l) => s + l.total, 0),
-    add, setQty, clearCart: () => setCart({}),
+    add, addQty, setQty, clearCart: () => setCart({}),
     cartOpen, setCartOpen, announce,
+    account, accountLoaded, setAccount,
+    reorder: items => {
+      const sold = new Set(catalogue?.products.map(p => p.id))
+      const available = items.filter(i => i.product_id != null && sold.has(i.product_id))
+      setCart(c => {
+        const next = { ...c }
+        for (const i of available) next[i.product_id!] = Math.min(9999, (next[i.product_id!] ?? 0) + i.qty)
+        return next
+      })
+      setAnnounce(`${available.length} item${available.length === 1 ? '' : 's'} added to cart.`)
+      return items.filter(i => !available.includes(i)).map(i => i.name)
+    },
   }
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

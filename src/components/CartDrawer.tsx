@@ -3,6 +3,7 @@ import { Icon } from './Icon'
 import { ProductImage } from './Product'
 import { formatKobo } from '../lib/api'
 import { navigate } from '../lib/router'
+import { productPath } from '../../server/src/slug.ts'
 import { useStore } from '../lib/store'
 
 export function CartDrawer() {
@@ -44,7 +45,7 @@ export function CartDrawer() {
         </div> : lines.map(({ product: p, qty, unit, total }) => <div className="cart-item" key={p.id}>
           <div className="cart-thumb"><ProductImage product={p} /></div>
           <div>
-            <b>{p.name}</b><small>{p.pack}</small>
+            <button className="cart-name" onClick={() => go(productPath(p))}>{p.name}</button><small>{p.pack}</small>
             <span>{formatKobo(unit)} each{unit === p.bulk_price_kobo ? ' · wholesale' : ''}</span>
             {qty < p.bulk_min_qty && <small className="bulk-hint">Add {p.bulk_min_qty - qty} more for {formatKobo(p.bulk_price_kobo)} each</small>}
             <div className="cart-item-row">
@@ -64,7 +65,7 @@ export function CartDrawer() {
         <div><span>Subtotal</span><b>{formatKobo(subtotal)}</b></div>
         <p>Delivery is added at checkout.</p>
         <button className="checkout" onClick={() => go('/checkout')}>Proceed to checkout <Icon name="arrow" /></button>
-        <span className="secure"><Icon name="shield" size={15} /> Secure payment by Paystack</span>
+        <span className="secure"><Icon name="shield" size={15} /> Secure payment with PalmPay</span>
       </div>}
     </aside>
   </>

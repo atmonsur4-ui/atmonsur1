@@ -1,36 +1,41 @@
-// Atmonsur Store server: JSON API for the website, Paystack webhook, admin pages, and the built website itself.
+// Atmonsur Store server: JSON API for the website, PalmPay payment notifications, admin pages, and the built website itself.
 import { Hono, type MiddlewareHandler } from 'hono'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { secureHeaders } from 'hono/secure-headers'
 import { HTTPException } from 'hono/http-exception'
-import { readFileSync } from 'node:fs'
+import { pageHtml, productPage, robots, sitemap } from './seo.ts'
+import { productIdFromPath } from './slug.ts'
 import { migrate, sql, type PricedRow } from './db.ts'
-import { getOrder, paystack, settleOrder } from './orders.ts'
+import { getOrder, settleOrder, type PalmPayOrder } from './orders.ts'
 import { notifyOwner } from './notify.ts'
 import { lineTotal, unitPrice } from './pricing.ts'
 import { parseCheckout, parseEnquiry, REFERENCE } from './validate.ts'
-import { newReference, paystackSignatureValid } from './paystack.ts'
+import { newReference, notificationValid, palmpay } from './palmpay.ts'
 import { admin } from './admin.ts'
+import { accounts, currentCustomer } from './accounts.ts'
+import { rateLimit } from './rateLimit.ts'
 
 const app = new Hono()
+const PALMPAY_NOTIFY_PATH = '/api/palmpay/notify'
+const siteUrl = (c: { req: { url: string } }) => process.env.SITE_URL ?? new URL(c.req.url).origin
 app.use(secureHeaders())
 
-// shortcut: per-process memory, so limits reset on restart and aren't shared between instances; fine for one server.
-const hits = new Map<string, { n: number; reset: number }>()
-setInterval(() => { const now = Date.now(); for (const [k, h] of hits) if (h.reset < now) hits.delete(k) }, 60_000).unref()
-const rateLimit = (perMinute: number): MiddlewareHandler => async (c, next) => {
-  const key = `${c.req.path}|${c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? 'local'}`
-  const now = Date.now(), h = hits.get(key)
-  if (!h || h.reset < now) hits.set(key, { n: 1, reset: now + 60_000 })
-  else if (++h.n > perMinute) return c.json({ error: 'Too many requests. Please wait a minute and try again.' }, 429)
+// Cross-site protection for the login cookie: other websites can't send JSON here without a CORS preflight,
+// which this server never approves. So every API POST must be JSON (PalmPay's notification is checked by signature).
+const jsonOnly: MiddlewareHandler = async (c, next) => {
+  if (c.req.method === 'POST' && c.req.path !== PALMPAY_NOTIFY_PATH && !c.req.header('content-type')?.startsWith('application/json')) {
+    return c.json({ error: 'Expected JSON.' }, 415)
+  }
   await next()
 }
+app.use('/api/*', jsonOnly)
+app.route('/api/account', accounts)
 
 app.get('/api/catalogue', async c => {
   const [categories, products, zones] = await Promise.all([
     sql`select name, note, color, art_kind from categories order by sort, name`,
-    sql`select id, name, category, pack, price_kobo, bulk_price_kobo, bulk_min_qty, badge, image_url, art_kind, color
+    sql`select id, name, category, pack, price_kobo, bulk_price_kobo, bulk_min_qty, badge, image_url, art_kind, color, description
         from products where active order by sort, id`,
     sql`select id, name, fee_kobo, needs_address from delivery_zones where active order by sort, id`,
   ])
@@ -57,28 +62,33 @@ app.post('/api/checkout', rateLimit(10), async c => {
   const subtotal = lines.reduce((s, l) => s + l.line_total_kobo, 0)
   const total = subtotal + zone.fee_kobo
   const reference = newReference()
+  const account = await currentCustomer(c) // null for guest checkout
 
   const orderId = await sql.begin(async tx => {
     const [order] = await tx`insert into orders ${tx({
-      reference, customer_name: customer.name, email: customer.email, phone: customer.phone,
+      reference, customer_id: account?.id ?? null, customer_name: customer.name, email: customer.email, phone: customer.phone,
       delivery_zone: zone.id, delivery_zone_name: zone.name,
       address: zone.needs_address ? customer.address : null, city: zone.needs_address ? customer.city : null, notes: customer.notes || null,
       subtotal_kobo: subtotal, delivery_fee_kobo: zone.fee_kobo, total_kobo: total,
     })} returning id`
     await tx`insert into order_items ${tx(lines.map(l => ({ ...l, order_id: order.id })))}`
+    // Remember the delivery details on the account so the next checkout is pre-filled.
+    if (account) await tx`update customers set phone = ${customer.phone}, delivery_zone = ${zone.id},
+      address = coalesce(${zone.needs_address ? customer.address : null}, address), city = coalesce(${zone.needs_address ? customer.city : null}, city)
+      where id = ${account.id}`
     return order.id as number
   })
 
   try {
-    const tx = await paystack('/transaction/initialize', {
-      method: 'POST',
-      body: JSON.stringify({
-        email: customer.email, amount: total, currency: 'NGN', reference,
-        callback_url: `${process.env.SITE_URL ?? new URL(c.req.url).origin}/order?reference=${reference}`,
-        metadata: { order_id: orderId, customer_name: customer.name, phone: customer.phone },
-      }),
+    const data = await palmpay('/api/v2/payment/merchant/createorder', {
+      orderId: reference, amount: total, currency: 'NGN',
+      title: 'Atmonsur Store order',
+      description: lines.map(l => `${l.qty} x ${l.name}`).join(', ').slice(0, 200),
+      notifyUrl: siteUrl(c) + PALMPAY_NOTIFY_PATH,
+      callBackUrl: `${siteUrl(c)}/order?reference=${reference}`,
     })
-    return c.json({ authorization_url: tx.authorization_url, reference })
+    if (!data?.checkoutUrl) throw new Error('PalmPay returned no checkoutUrl')
+    return c.json({ checkout_url: data.checkoutUrl, reference })
   } catch (e) {
     console.error(e)
     await sql`update orders set status = 'failed' where id = ${orderId}`
@@ -86,7 +96,7 @@ app.post('/api/checkout', rateLimit(10), async c => {
   }
 })
 
-// Confirmation page. If Paystack's webhook hasn't arrived yet, ask Paystack directly so the customer sees the result now.
+// Confirmation page. If PalmPay's notification hasn't arrived yet, ask PalmPay directly so the customer sees the result now.
 app.get('/api/orders/:reference', rateLimit(30), async c => {
   const reference = c.req.param('reference')
   if (!REFERENCE.test(reference)) return c.json({ error: 'Order not found.' }, 404)
@@ -94,9 +104,10 @@ app.get('/api/orders/:reference', rateLimit(30), async c => {
   if (!order) return c.json({ error: 'Order not found.' }, 404)
   if (order.status === 'pending') {
     try {
-      order = (await settleOrder(await paystack(`/transaction/verify/${encodeURIComponent(reference)}`))) ?? order
+      const tx: PalmPayOrder = await palmpay('/api/v2/payment/merchant/order/queryStatus', { orderId: reference })
+      order = (await settleOrder({ ...tx, orderId: reference })) ?? order
     } catch (e) {
-      console.error(e) // no completed transaction yet (customer closed the payment page): stays pending
+      console.error(e) // PalmPay unreachable or order unknown to it: stays pending, the customer can check again
     }
   }
   // Only what the confirmation page needs; the unguessable reference is the customer's key to it.
@@ -117,15 +128,18 @@ app.post('/api/enquiries', rateLimit(5), async c => {
   return c.json({ ok: true })
 })
 
-// Set in Paystack → Settings → API Keys & Webhooks: https://<your-domain>/api/paystack/webhook
-app.post('/api/paystack/webhook', async c => {
+// PalmPay posts payment results here (we send this address as notifyUrl with every order).
+// It must answer the plain text "success", or PalmPay retries (5s, 30s, 4m … up to 15h).
+app.post(PALMPAY_NOTIFY_PATH, async c => {
   const raw = await c.req.text()
-  if (!(await paystackSignatureValid(raw, c.req.header('x-paystack-signature') ?? null, process.env.PAYSTACK_SECRET_KEY ?? ''))) {
-    return c.text('Invalid signature', 401)
+  let body: Record<string, unknown>
+  try { body = JSON.parse(raw) } catch { body = Object.fromEntries(new URLSearchParams(raw)) } // docs show JSON; accept a form post too
+  if (!notificationValid(body, process.env.PALMPAY_PUBLIC_KEY ?? '')) {
+    console.error('PalmPay notification with an invalid signature ignored', body.orderId)
+    return c.text('invalid signature', 401)
   }
-  const event = JSON.parse(raw)
-  if (event.event === 'charge.success') await settleOrder(event.data)
-  return c.text('ok') // 200 for every signed event so Paystack stops retrying
+  await settleOrder(body as unknown as PalmPayOrder) // only orderStatus 2 with the exact amount marks an order paid
+  return c.text('success')
 })
 
 app.all('/api/*', c => c.json({ error: 'Not found' }, 404))
@@ -133,12 +147,17 @@ app.route('/admin', admin)
 
 // The built website (npm run build → dist/). Hashed asset files never change, so browsers may cache them for a year.
 app.use('/assets/*', async (c, next) => { await next(); c.header('Cache-Control', 'public, max-age=31536000, immutable') })
+app.get('/', c => c.html(pageHtml())) // not the raw dist/index.html: the preview image needs a full address
+app.get('/index.html', c => c.redirect('/', 301))
 app.use('/*', serveStatic({ root: './dist' }))
-let indexHtml = ''
-app.get('*', c => {
-  indexHtml ||= readFileSync('./dist/index.html', 'utf8') // every other path is a page of the single-page app
-  return c.html(indexHtml)
+app.get('/sitemap.xml', async c => c.body(await sitemap(), 200, { 'Content-Type': 'application/xml; charset=utf-8' }))
+app.get('/robots.txt', c => c.text(robots()))
+app.get('/product/*', async c => {
+  const id = productIdFromPath(c.req.path)
+  const html = id ? await productPage(id) : null
+  return html ? c.html(html) : c.html(pageHtml(), 404) // the app shows "no longer available"
 })
+app.get('*', c => c.html(pageHtml())) // every other path is a page of the single-page app
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) return err.getResponse() // e.g. 401 password prompt, 403 cross-site form
