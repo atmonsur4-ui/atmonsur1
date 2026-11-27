@@ -6,7 +6,7 @@ import { sql, type OrderItemRow, type OrderRow } from './db.ts'
 import { sendEmail } from './notify.ts'
 import { hashPassword, randomToken, sha256, verifyPassword } from './passwords.ts'
 import { overLimit, rateLimit } from './rateLimit.ts'
-import { checkPassword, normaliseEmail, parseProfile, parseSignup } from './validate.ts'
+import { checkPassword, normaliseEmail, parseAddress, parseProfile, parseSignup } from './validate.ts'
 
 export type CustomerRow = {
   id: number; email: string; name: string; phone: string; password_hash: string; email_verified_at: Date | null
@@ -33,8 +33,7 @@ async function startSession(c: Context, customerId: number) {
 }
 
 const publicCustomer = (c: CustomerRow) => ({
-  name: c.name, email: c.email, phone: c.phone, email_verified: Boolean(c.email_verified_at),
-  address: c.address, city: c.city, delivery_zone: c.delivery_zone,
+  name: c.name, email: c.email, phone: c.phone, email_verified: Boolean(c.email_verified_at), member_since: c.created_at,
 })
 
 async function emailToken(customer: CustomerRow, purpose: 'verify' | 'reset') {
@@ -179,4 +178,97 @@ accounts.get('/orders', signedIn, async c => {
       items: items.filter(i => i.order_id === o.id).map(i => ({ product_id: i.product_id, name: i.name, pack: i.pack, qty: i.qty, line_total_kobo: i.line_total_kobo })),
     })),
   })
+})
+
+// ---- Overview ----
+accounts.get('/summary', signedIn, async c => {
+  c.header('Cache-Control', 'no-store')
+  const id = c.get('customer').id
+  const [s] = await sql`select count(*) filter (where status = 'paid' or payment_method = 'transfer')::int as orders,
+      coalesce(sum(total_kobo) filter (where status = 'paid'), 0)::bigint as spent from orders where customer_id = ${id} and status <> 'failed'`
+  const [last] = await sql`select reference, status, payment_method, fulfilment, created_at, total_kobo from orders
+    where customer_id = ${id} and (status = 'paid' or payment_method = 'transfer') order by created_at desc limit 1`
+  const [{ addresses }] = await sql`select count(*)::int as addresses from customer_addresses where customer_id = ${id}`
+  return c.json({ orders: s.orders, spent_kobo: Number(s.spent), last_order: last ?? null, addresses })
+})
+
+// ---- Address book (max 10 per customer) ----
+type AddressRow = { id: number; label: string; delivery_zone: string; address: string | null; city: string | null; is_default: boolean }
+
+accounts.get('/addresses', signedIn, async c => {
+  c.header('Cache-Control', 'no-store')
+  const rows = await sql<AddressRow[]>`select id, label, delivery_zone, address, city, is_default from customer_addresses
+    where customer_id = ${c.get('customer').id} order by is_default desc, created_at`
+  return c.json({ addresses: rows })
+})
+
+async function saveAddress(c: Context<Env>, id: number | null) {
+  const customerId = c.get('customer').id
+  const b = await body(c)
+  const [zone] = await sql`select needs_address from delivery_zones where id = ${String(b.delivery_zone ?? '')} and active`
+  if (!zone) return c.json({ error: 'Choose a delivery option.' }, 400)
+  const parsed = parseAddress(b, zone.needs_address)
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400)
+  const v = parsed.value
+  const result = await sql.begin(async tx => {
+    const [{ n }] = await tx`select count(*)::int as n from customer_addresses where customer_id = ${customerId}`
+    if (!id && n >= 10) return 'full'
+    const makeDefault = v.is_default || n === 0 || (n === 1 && id !== null)
+    if (makeDefault) await tx`update customer_addresses set is_default = false where customer_id = ${customerId}`
+    const row = { label: v.label, delivery_zone: v.delivery_zone, address: v.address, city: v.city, is_default: makeDefault }
+    const done = id
+      ? await tx`update customer_addresses set ${tx(row)} where id = ${id} and customer_id = ${customerId} returning id`
+      : await tx`insert into customer_addresses ${tx({ ...row, customer_id: customerId })} returning id`
+    return done.length ? 'ok' : 'missing'
+  })
+  if (result === 'full') return c.json({ error: 'You can save up to 10 addresses. Delete one first.' }, 400)
+  if (result === 'missing') return c.json({ error: 'Address not found.' }, 404)
+  return c.json({ ok: true })
+}
+accounts.post('/addresses', signedIn, c => saveAddress(c, null))
+accounts.post('/addresses/:id{[0-9]+}', signedIn, c => saveAddress(c, Number(c.req.param('id'))))
+
+accounts.post('/addresses/:id{[0-9]+}/delete', signedIn, async c => {
+  const customerId = c.get('customer').id
+  await sql.begin(async tx => {
+    const [gone] = await tx`delete from customer_addresses where id = ${Number(c.req.param('id'))} and customer_id = ${customerId} returning is_default`
+    // keep one default if the default was removed
+    if (gone?.is_default) await tx`update customer_addresses set is_default = true where id = (select id from customer_addresses where customer_id = ${customerId} order by created_at limit 1)`
+  })
+  return c.json({ ok: true })
+})
+
+// ---- Favourites ----
+accounts.get('/favourites', signedIn, async c => {
+  c.header('Cache-Control', 'no-store')
+  const rows = await sql<{ product_id: number }[]>`select product_id from customer_favourites where customer_id = ${c.get('customer').id} order by created_at desc`
+  return c.json({ product_ids: rows.map(r => r.product_id) })
+})
+
+accounts.post('/favourites/:productId{[0-9]+}', signedIn, async c => {
+  const customerId = c.get('customer').id, productId = Number(c.req.param('productId'))
+  const on = (await body(c)).on === true
+  if (on) {
+    const [{ n }] = await sql`select count(*)::int as n from customer_favourites where customer_id = ${customerId}`
+    if (n >= 200) return c.json({ error: 'You have reached the favourites limit.' }, 400)
+    await sql`insert into customer_favourites (customer_id, product_id) select ${customerId}, id from products where id = ${productId} on conflict do nothing`
+  } else await sql`delete from customer_favourites where customer_id = ${customerId} and product_id = ${productId}`
+  return c.json({ ok: true })
+})
+
+// ---- Security ----
+accounts.post('/logout-everywhere', signedIn, async c => {
+  await sql`delete from sessions where customer_id = ${c.get('customer').id}`
+  deleteCookie(c, COOKIE, { path: '/' })
+  return c.json({ ok: true })
+})
+
+/** Deletes the account (saved addresses, favourites and sessions go with it). Past orders are kept for the shop's records, unlinked. */
+accounts.post('/delete', signedIn, async c => {
+  const customer = c.get('customer')
+  if (overLimit(`delete|${customer.id}`, 5, 15 * 60_000)) return c.json({ error: 'Too many attempts. Please wait 15 minutes.' }, 429)
+  if (!(await verifyPassword(String((await body(c)).password ?? ''), customer.password_hash))) return c.json({ error: 'Your password is incorrect.' }, 400)
+  await sql`delete from customers where id = ${customer.id}`
+  deleteCookie(c, COOKIE, { path: '/' })
+  return c.json({ ok: true })
 })

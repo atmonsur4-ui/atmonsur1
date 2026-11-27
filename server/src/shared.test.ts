@@ -134,3 +134,26 @@ test('photos shipped with the site are accepted as product photos', async () => 
   assert.equal(ownImage('/products/../admin.jpg'), false)
   assert.equal(ownImage('/products/pepsi.svg'), false)
 })
+
+test('wholesale quote requests: sizes from the list only, products and location required, honeypot', async () => {
+  const { parseQuote } = await import('./validate.ts')
+  const good = { name: 'Tunde Bello', business: 'Bello Stores', phone: '08031234567', email: 'Tunde@Example.com', location: 'Ikorodu, Lagos', size: 'Half truck', products: 'Pepsi 50cl x 12 - 300 cartons' }
+  const r = parseQuote(good)
+  assert.ok(r.ok)
+  assert.equal(r.value.email, 'tunde@example.com')
+  assert.equal(parseQuote({ ...good, size: '10 trucks' }).ok, false)
+  assert.equal(parseQuote({ ...good, products: '' }).ok, false)
+  assert.equal(parseQuote({ ...good, location: '' }).ok, false)
+  assert.equal(parseQuote({ ...good, website: 'x' }).spam, true)
+})
+
+test('saved addresses: delivery needs a street and town, pickup does not', async () => {
+  const { parseAddress } = await import('./validate.ts')
+  const shop = { label: 'Shop', delivery_zone: 'epe', address: '12 Market Road', city: 'Epe', is_default: true }
+  assert.ok(parseAddress(shop, true).ok)
+  assert.equal(parseAddress({ ...shop, address: '' }, true).ok, false)
+  assert.equal(parseAddress({ ...shop, label: '' }, true).ok, false)
+  const pickup = parseAddress({ label: 'Pickup', delivery_zone: 'pickup', address: 'ignored street', city: 'x' }, false)
+  assert.ok(pickup.ok)
+  assert.equal(pickup.value.address, null) // pickup stores no street address
+})

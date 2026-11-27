@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { DeliveryOptions, ProductCard, ProductImage } from '../components/Product'
+import { DeliveryOptions, FavouriteButton, ProductCard, ProductImage } from '../components/Product'
 import { CONTACT, formatKobo } from '../lib/api'
 import { Link, navigate, useLocation } from '../lib/router'
 import { useStore } from '../lib/store'
@@ -10,7 +10,7 @@ import { CatalogueStatus } from './Home'
 
 export function ProductPage() {
   const { path } = useLocation()
-  const { catalogue, buyer, addQty, setCartOpen } = useStore()
+  const { catalogue, addQty, setCartOpen } = useStore()
   const id = productIdFromPath(path)
   const product = catalogue?.products.find(p => p.id === id)
   const [qty, setQty] = useState(1)
@@ -22,7 +22,7 @@ export function ProductPage() {
   useEffect(() => {
     if (!product) return
     document.title = `${product.name} (${product.pack}) | Atmonsur Store`
-    setQty(buyer === 'bulk' ? product.bulk_min_qty : 1)
+    setQty(1)
     setAdded(false)
   }, [product?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -51,12 +51,12 @@ export function ProductPage() {
         <div className="product-detail-image">{p.badge && <span className="badge">{p.badge}</span>}<ProductImage product={p} /></div>
         <div>
           <span className="product-category">{p.category}</span>
-          <h1>{p.name}</h1>
+          <div className="title-row"><h1>{p.name}</h1><FavouriteButton product={p} className="fav-lg" /></div>
           <p className="pack">{p.pack}</p>
 
           <div className="price-tiers">
             <div className={qty < p.bulk_min_qty ? 'tier active' : 'tier'}><small>Retail</small><b>{formatKobo(p.price_kobo)}</b><span>per pack</span></div>
-            <div className={qty >= p.bulk_min_qty ? 'tier active' : 'tier'}><small>Wholesale{savingPct > 0 ? ` · save ${savingPct}%` : ''}</small><b>{formatKobo(p.bulk_price_kobo)}</b><span>each from {p.bulk_min_qty} packs</span></div>
+            <div className={qty >= p.bulk_min_qty ? 'tier active' : 'tier'}><small>Bulk price{savingPct > 0 ? ` · save ${savingPct}%` : ''}</small><b>{formatKobo(p.bulk_price_kobo)}</b><span>each from {p.bulk_min_qty} packs</span></div>
           </div>
 
           <div className="buy-row">
@@ -68,18 +68,19 @@ export function ProductPage() {
             <button className="button orange" onClick={() => { addQty(p, qty); setAdded(true) }}>Add {qty} to cart · {formatKobo(lineTotal(p, qty))}</button>
           </div>
           <p className="muted" aria-live="polite">
-            {qty >= p.bulk_min_qty ? `Wholesale price applied: ${formatKobo(unit)} each.` : `Add ${p.bulk_min_qty - qty} more to pay ${formatKobo(p.bulk_price_kobo)} each.`}
+            {qty >= p.bulk_min_qty ? `Bulk price applied: ${formatKobo(unit)} each.` : `Add ${p.bulk_min_qty - qty} more to pay ${formatKobo(p.bulk_price_kobo)} each.`}
           </p>
           <div role="status" aria-live="polite">{added && <p className="form-success">Added to your cart. <button className="underline font-bold" onClick={() => setCartOpen(true)}>View cart</button></p>}</div>
 
           {p.description && <div className="product-description">{p.description.split(/\n{2,}/).map((para, i) => <p key={i}>{para}</p>)}</div>}
           <dl className="product-facts">
             <div><dt>Pack size</dt><dd>{p.pack}</dd></div>
-            <div><dt>Wholesale from</dt><dd>{p.bulk_min_qty} packs</dd></div>
+            <div><dt>Bulk price from</dt><dd>{p.bulk_min_qty}</dd></div>
+            <div><dt>Pallet or truck orders</dt><dd><Link className="underline" to="/wholesale#quote">Request a quote</Link></dd></div>
           </dl>
           <h2 className="detail-h">Delivery options</h2>
           <DeliveryOptions />
-          <p className="muted">{catalogue.payments === 'palmpay' ? 'Pay securely online with PalmPay at checkout.' : 'Pay by cash or bank transfer on delivery or when you collect.'}</p>
+          <p className="muted">{catalogue.payments === 'palmpay' ? 'Pay securely online with PalmPay at checkout.' : 'Pay by bank transfer before delivery or pickup.'}</p>
           <p className="muted">Questions about this product? <a className="underline" href={`${CONTACT.whatsapp}?text=${encodeURIComponent(`Hello Atmonsur, I have a question about ${p.name} (${p.pack})`)}`} target="_blank" rel="noreferrer">Ask us on WhatsApp</a> or call {CONTACT.phone}.</p>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { Icon } from '../components/Icon'
 import { ProductArt } from '../components/ProductArt'
-import { BuyerStrip, ProductCard } from '../components/Product'
+import { ProductCard, WholesaleStrip } from '../components/Product'
 import { CONTACT } from '../lib/api'
 import { Link, navigate, useLocation } from '../lib/router'
 import { useStore } from '../lib/store'
@@ -30,10 +30,10 @@ export function Shop() {
       <div><span className="kicker">The Atmonsur store</span><h1>Everyday essentials.<br /><em>Better value.</em></h1><p>Shop food, drinks and home-care products for your household or business.</p></div>
       <div className="shop-hero-art"><ProductArt kind="bottle" color="#3796df" /><ProductArt kind="bag" color="#d87a2b" /><ProductArt kind="cleaner" color="#19956f" /></div>
     </div></section>
-    <BuyerStrip />
+    <WholesaleStrip />
     <section className="section shell shop-page" aria-labelledby="shop-h">
       <div className="section-heading shop-heading">
-        <div><span className="kicker">Retail and wholesale</span><h2 id="shop-h">{category === 'All' ? 'All products' : category}</h2>
+        <div><span className="kicker">Sold by the roll, carton or pack</span><h2 id="shop-h">{category === 'All' ? 'All products' : category}</h2>
           <p className="shop-description" aria-live="polite">{q ? <>{visible.length} result{visible.length === 1 ? '' : 's'} for “{q}” <button className="text-link inline-flex" onClick={() => setFilter({ q: '' })}>Clear search</button></> : 'Clear pack sizes and prices, with wholesale rates built in.'}</p></div>
         <div className="filter-pills" role="group" aria-label="Filter by category">
           {['All', ...(catalogue?.categories.map(c => c.name) ?? [])].map(name =>

@@ -1,7 +1,7 @@
 import heroImage from '../assets/hero-fmcg.webp'
 import { Icon } from '../components/Icon'
 import { ProductArt } from '../components/ProductArt'
-import { BuyerStrip, ProductCard } from '../components/Product'
+import { ProductCard, WholesaleStrip } from '../components/Product'
 import { formatKobo } from '../lib/api'
 import { Link, navigate } from '../lib/router'
 import { useStore } from '../lib/store'
@@ -15,13 +15,13 @@ export function CatalogueStatus() {
 }
 
 export function Home() {
-  const { catalogue, setBuyer } = useStore()
+  const { catalogue } = useStore()
   const products = catalogue?.products ?? []
-  // Savings example built from the live price list: each product bought at its wholesale minimum.
+  // Savings example built from the live price list: each product bought at its bulk minimum.
   const retail = products.reduce((s, p) => s + p.price_kobo * p.bulk_min_qty, 0)
   const bulk = products.reduce((s, p) => s + p.bulk_price_kobo * p.bulk_min_qty, 0)
   const maxPct = products.length ? Math.floor(Math.max(...products.map(p => (1 - p.bulk_price_kobo / p.price_kobo) * 100))) : 0
-  const shopBulk = () => { setBuyer('bulk'); navigate('/shop') }
+  const shopBulk = () => navigate('/wholesale')
   const online = catalogue?.payments === 'palmpay'
 
   return <>
@@ -31,7 +31,7 @@ export function Home() {
         <h1>Stock up smarter.<br /><em>Grow your business.</em></h1>
         <p>Shop trusted beverages, food and household essentials at clear prices, with dependable delivery across Nigeria.</p>
         <div className="hero-ctas"><Link to="/shop" className="button primary">Shop products <Icon name="arrow" /></Link><button className="button secondary" onClick={shopBulk}>Buy in bulk</button></div>
-        <div className="hero-proof"><span><Icon name="shield" size={17} /> {online ? 'Secure payment with PalmPay' : 'Pay on delivery or pickup'}</span><span><Icon name="truck" size={17} /> Delivery or free store pickup</span></div>
+        <div className="hero-proof"><span><Icon name="shield" size={17} /> {online ? 'Secure payment with PalmPay' : 'Pay by bank transfer'}</span><span><Icon name="truck" size={17} /> Delivery or free store pickup</span></div>
       </div>
       <div className="hero-visual">
         <img src={heroImage} width="1536" height="1024" fetchPriority="high" alt="An assortment of essentials including drinks, grains, noodles and cleaning products" />
@@ -39,7 +39,7 @@ export function Home() {
         <div className="stock-float"><span className="pulse"></span><span><b>Fresh stock</b><small>Ready to dispatch</small></span></div>
       </div>
     </section>
-    <BuyerStrip />
+    <WholesaleStrip />
 
     <section className="section shell" id="categories" aria-labelledby="cat-h">
       <div className="section-heading"><div><span className="kicker">Find what you need</span><h2 id="cat-h">Shop by category</h2></div><Link className="text-link" to="/shop">View all products <Icon name="arrow" size={17} /></Link></div>
@@ -57,14 +57,14 @@ export function Home() {
 
     <section className="shell wholesale" id="offers" aria-labelledby="offers-h">
       <div className="wholesale-copy"><span className="kicker light">Built for your business</span><h2 id="offers-h">Buying for a shop,<br />hotel or office?</h2>
-        <p>Wholesale prices apply automatically once you buy a product's minimum quantity. No account or application needed.</p>
-        <ul><li><span>01</span>Wholesale prices that reward volume</li><li><span>02</span>{online ? 'Pay online with PalmPay or bank transfer' : 'Pay by cash or transfer on delivery or pickup'}</li><li><span>03</span>Delivery or free pickup from our Epe store</li></ul>
-        <button className="button orange" onClick={shopBulk}>See wholesale prices <Icon name="arrow" /></button></div>
+        <p>Bulk prices apply automatically once you buy a product's minimum quantity. For pallets and trucks, request a wholesale quote.</p>
+        <ul><li><span>01</span>Bulk prices from each product’s minimum (5 to 77 for drinks)</li><li><span>02</span>{online ? 'Pay online with PalmPay or bank transfer' : 'Pay by bank transfer, then we deliver'}</li><li><span>03</span>Delivery or free pickup from our Epe store</li></ul>
+        <button className="button orange" onClick={shopBulk}>Bulk &amp; wholesale prices <Icon name="arrow" /></button></div>
       {products.length > 0 && <div className="wholesale-card"><span className="mini-label">Your business saves</span>
-        <div><b>Up to {maxPct}%</b><span>with wholesale pricing</span></div>
+        <div><b>Up to {maxPct}%</b><span>with bulk prices</span></div>
         <div className="saving-line"><span>Retail total</span><s>{formatKobo(retail)}</s></div>
-        <div className="saving-line strong"><span>Wholesale total</span><b>{formatKobo(bulk)}</b></div>
-        <small>Example: the wholesale minimum of every product in our catalogue.</small></div>}
+        <div className="saving-line strong"><span>Bulk total</span><b>{formatKobo(bulk)}</b></div>
+        <small>Example: the bulk minimum of every product in our catalogue.</small></div>}
     </section>
 
     <section className="section shell why" id="about" aria-labelledby="about-h">
@@ -73,8 +73,8 @@ export function Home() {
         <div><i><Icon name="truck" size={27} /></i><b>Reliable delivery</b><p>Choose delivery at checkout and see the fee before you pay, or pick up free from our store.</p></div>
         <div><i><Icon name="shield" size={27} /></i>{online
           ? <><b>Secure payments</b><p>Pay through PalmPay’s secure checkout, with your PalmPay app or by bank transfer. Your bank and wallet details never pass through our website.</p></>
-          : <><b>Pay on delivery</b><p>Place your order online and pay by cash or bank transfer when it’s delivered or when you collect it.</p></>}</div>
-        <div><i><Icon name="cart" size={27} /></i><b>Wholesale built in</b><p>Prices drop automatically when you buy in wholesale quantities.</p></div>
+          : <><b>Simple payment</b><p>Place your order online, pay by bank transfer, and we deliver or prepare your pickup as soon as your payment is confirmed.</p></>}</div>
+        <div><i><Icon name="cart" size={27} /></i><b>Bulk &amp; wholesale</b><p>Bulk prices apply automatically, and we supply by the pallet, half truck or full truck.</p></div>
       </div>
     </section>
   </>

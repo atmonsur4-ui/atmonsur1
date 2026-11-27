@@ -30,15 +30,15 @@ export async function settleOrder(tx: PalmPayOrder) {
   return { ...order, status: updated.length ? ('paid' as const) : order.status }
 }
 
-/** Emails the owner a new order: paid online, or placed to pay on delivery/pickup. */
+/** Emails the owner a new order: paid online, or placed and awaiting the customer's bank transfer. */
 export async function notifyNewOrder(order: NonNullable<Awaited<ReturnType<typeof getOrder>>>) {
-  const onDelivery = order.payment_method === 'on_delivery'
-  await notifyOwner(onDelivery ? `New order ${order.reference} (pay on delivery): ${naira(order.total_kobo)}` : `New paid order ${order.reference}: ${naira(order.total_kobo)}`, [
+  const byTransfer = order.payment_method === 'transfer'
+  await notifyOwner(byTransfer ? `New order ${order.reference} (awaiting transfer): ${naira(order.total_kobo)}` : `New paid order ${order.reference}: ${naira(order.total_kobo)}`, [
     `Customer: ${order.customer_name}`, `Phone: ${order.phone}`, `Email: ${order.email}`, `Delivery: ${order.delivery_zone_name}`,
     ...(order.address ? [`Address: ${order.address}, ${order.city ?? ''}`] : []), ...(order.notes ? [`Notes: ${order.notes}`] : []),
     '', ...order.items.map(i => `${i.qty} × ${i.name} (${i.pack}) = ${naira(i.line_total_kobo)}`),
     '', `Subtotal: ${naira(order.subtotal_kobo)}`, `Delivery: ${naira(order.delivery_fee_kobo)}`,
-    onDelivery ? `Total to collect: ${naira(order.total_kobo)} (NOT PAID YET: call the customer to confirm, collect payment on delivery or pickup)` : `Total paid: ${naira(order.total_kobo)}`,
+    byTransfer ? `Total: ${naira(order.total_kobo)} (NOT PAID YET: wait for the bank transfer with reference ${order.reference}, then mark the order paid in admin before delivering)` : `Total paid: ${naira(order.total_kobo)}`,
     '', `View in admin: ${process.env.SITE_URL ?? ''}/admin/orders/${order.reference}`,
   ].join('\n'))
 }

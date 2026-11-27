@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Footer, Header } from './components/Layout'
 import { CartDrawer } from './components/CartDrawer'
+import { AddedToast } from './components/AddedToast'
 import { useLocation } from './lib/router'
 import { StoreProvider, useStore } from './lib/store'
 import { Home } from './pages/Home'
@@ -12,8 +13,9 @@ import { Legal, legalPages } from './pages/Legal'
 import { NotFound } from './pages/NotFound'
 import { Account } from './pages/Account'
 import { ProductPage } from './pages/ProductPage'
+import { Wholesale } from './pages/Wholesale'
 
-const titles: Record<string, string> = { '/shop': 'Shop', '/contact': 'Contact us', '/checkout': 'Checkout', '/order': 'Your order', '/privacy': 'Privacy policy', '/terms': 'Terms & conditions', '/account': 'Your account', '/account/verify': 'Confirm email', '/account/reset': 'Reset password' }
+const titles: Record<string, string> = { '/shop': 'Shop', '/wholesale': 'Bulk & wholesale', '/contact': 'Contact us', '/checkout': 'Checkout', '/order': 'Your order', '/privacy': 'Privacy policy', '/terms': 'Terms & conditions', '/account': 'Your account', '/account/orders': 'Your orders', '/account/addresses': 'Saved addresses', '/account/favourites': 'Favourites', '/account/settings': 'Account settings', '/account/verify': 'Confirm email', '/account/reset': 'Reset password' }
 
 function Page() {
   const { path, hash } = useLocation()
@@ -27,6 +29,7 @@ function Page() {
 
   const page = path === '/' ? <Home />
     : path === '/shop' ? <Shop />
+    : path === '/wholesale' ? <Wholesale />
     : path === '/contact' ? <Contact />
     : path === '/checkout' ? <Checkout />
     : path === '/order' ? <Order />
@@ -41,6 +44,7 @@ function Page() {
     <main id="main" tabIndex={-1}>{page}</main>
     <Footer />
     <CartDrawer />
+    <AddedToast />
     <p className="sr-only" role="status" aria-live="polite">{announce}</p>
   </div>
 }

@@ -23,7 +23,7 @@ export function Header() {
     e.preventDefault()
     navigate(search.trim() ? `/shop?q=${encodeURIComponent(search.trim())}` : '/shop')
   }
-  const nav = [['/shop', 'Shop'], ['/#categories', 'Categories'], ['/#offers', 'Offers'], ['/#about', 'About us'], ['/contact', 'Contact']]
+  const nav = [['/shop', 'Shop'], ['/#categories', 'Categories'], ['/wholesale', 'Bulk & wholesale'], ['/#about', 'About us'], ['/contact', 'Contact']]
 
   return <>
     <div className="topbar"><div className="shell topbar-inner"><span>Trusted FMCG supply across Nigeria</span>
@@ -59,11 +59,11 @@ export function Footer() {
   return <footer><div className="shell footer-top">
     <div className="footer-brand"><Brand inverted /><p>Your trusted partner for everyday FMCG products at retail and wholesale prices.</p></div>
     <div><h2 className="footer-h">Shop</h2>{catalogue?.categories.slice(0, 5).map(c => <Link key={c.name} to={`/shop?category=${encodeURIComponent(c.name)}`}>{c.name}</Link>)}</div>
-    <div><h2 className="footer-h">Company</h2><Link to="/#about">About us</Link><Link to="/contact">Contact</Link><Link to="/shop">Shop online</Link><Link to="/privacy">Privacy policy</Link><Link to="/terms">Terms & conditions</Link></div>
+    <div><h2 className="footer-h">Company</h2><Link to="/#about">About us</Link><Link to="/contact">Contact</Link><Link to="/shop">Shop online</Link><Link to="/wholesale">Bulk &amp; wholesale</Link><Link to="/privacy">Privacy policy</Link><Link to="/terms">Terms & conditions</Link></div>
     <div><h2 className="footer-h">Get in touch</h2>
       <a className="contact-line" href={CONTACT.phoneHref}><Icon name="phone" size={17} /> {CONTACT.phone}</a>
       <a className="contact-line" href={`mailto:${CONTACT.email}`}><Icon name="mail" size={17} /> <span className="break-all">{CONTACT.email}</span></a>
       <Link className="contact-line" to="/contact"><Icon name="location" size={17} /> Iraye Rd, Epe, Lagos</Link></div>
   </div>
-  <div className="shell footer-bottom"><span>© {new Date().getFullYear()} Atmonsur Multiglobal Resources Ltd.</span><span>{catalogue?.payments === 'palmpay' ? 'Payments processed securely by PalmPay' : 'Pay on delivery or at pickup'}</span></div></footer>
+  <div className="shell footer-bottom"><span>© {new Date().getFullYear()} Atmonsur Multiglobal Resources Ltd.</span><span>{catalogue?.payments === 'palmpay' ? 'Payments processed securely by PalmPay' : 'Pay by bank transfer before delivery'}</span></div></footer>
 }

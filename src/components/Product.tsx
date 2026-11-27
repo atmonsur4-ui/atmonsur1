@@ -11,27 +11,32 @@ export function ProductImage({ product, className }: { product: Product; classNa
     : <ProductArt kind={product.art_kind} color={product.color} />
 }
 
+export function FavouriteButton({ product: p, className = '' }: { product: Product; className?: string }) {
+  const { favourites, toggleFavourite } = useStore()
+  const on = favourites.has(p.id)
+  return <button className={`fav-btn ${on ? 'on' : ''} ${className}`} onClick={() => toggleFavourite(p)} aria-pressed={on}
+    aria-label={on ? `Remove ${p.name} from favourites` : `Save ${p.name} to favourites`} title={on ? 'Saved to favourites' : 'Save to favourites'}>
+    <Icon name="heart" size={18} />
+  </button>
+}
+
 export function ProductCard({ product: p }: { product: Product }) {
-  const { buyer, add } = useStore()
-  const bulk = buyer === 'bulk'
+  const { add } = useStore()
+  const hasBulk = p.bulk_price_kobo < p.price_kobo
   return <article className="product-card">
-    <div className="product-image">
+    <div className="product-media-wrap">
       {p.badge && <span className="badge">{p.badge}</span>}
-      <Link to={productPath(p)} className="product-image-link" tabIndex={-1} aria-hidden="true"><ProductImage product={p} /></Link>
-      <button className="quick-add" onClick={() => add(p)} aria-label={`Add ${p.name} to cart`}><Icon name="plus" /></button>
+      <FavouriteButton product={p} />
+      <Link to={productPath(p)} className="product-media" tabIndex={-1} aria-hidden="true"><ProductImage product={p} /></Link>
     </div>
-    <div className="product-info">
+    <div className="product-body">
       <span className="product-category">{p.category}</span>
       <h3><Link to={productPath(p)} className="product-link">{p.name}</Link></h3>
-      <p>{p.pack}</p>
-      <div className="price-row">
-        <div>
-          <b>{formatKobo(bulk ? p.bulk_price_kobo : p.price_kobo)}</b>
-          <small>{bulk ? `wholesale, from ${p.bulk_min_qty} packs` : `per pack · ${formatKobo(p.bulk_price_kobo)} from ${p.bulk_min_qty}`}</small>
-        </div>
-        <button onClick={() => add(p)} aria-label={`Add ${p.name} to cart`}>Add to cart</button>
-      </div>
+      <p className="product-pack">{p.pack}</p>
+      <p className="product-price"><b>{formatKobo(p.price_kobo)}</b><span>per pack</span></p>
+      {hasBulk && <p className="product-bulk">Bulk price <b>{formatKobo(p.bulk_price_kobo)}</b> each from {p.bulk_min_qty}</p>}
     </div>
+    <button className="add-btn" onClick={() => add(p)} aria-label={`Add ${p.name} to cart`}><Icon name="cart" size={17} /> Add to cart</button>
   </article>
 }
 
@@ -52,16 +57,9 @@ export function DeliveryOptions() {
   </ul>
 }
 
-export function BuyerStrip() {
-  const { buyer, setBuyer } = useStore()
-  return <section className="buyer-strip" aria-label="Pricing view"><div className="shell buyer-inner">
-    <div><span className="label" id="buyer-label">Show prices for</span>
-      <div className="buyer-toggle" role="group" aria-labelledby="buyer-label">
-        <button aria-pressed={buyer === 'retail'} className={buyer === 'retail' ? 'active' : ''} onClick={() => setBuyer('retail')}>Retail customer</button>
-        <button aria-pressed={buyer === 'bulk'} className={buyer === 'bulk' ? 'active' : ''} onClick={() => setBuyer('bulk')}>Bulk buyer</button>
-      </div></div>
-    <p>{buyer === 'retail'
-      ? 'No minimum order. Wholesale prices apply automatically when you buy enough of a product.'
-      : 'Wholesale prices are shown. Adding a product starts at its wholesale minimum quantity.'}</p>
+export function WholesaleStrip() {
+  return <section className="buyer-strip" aria-label="Wholesale"><div className="shell buyer-inner">
+    <p className="wholesale-strip-text"><b>Buying for a shop, hotel or office?</b> Bulk prices apply automatically from each product’s minimum, and we supply by the pallet or truck.</p>
+    <Link to="/wholesale" className="button orange">Bulk &amp; wholesale <Icon name="arrow" /></Link>
   </div></section>
 }

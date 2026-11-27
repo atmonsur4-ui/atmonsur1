@@ -6,7 +6,7 @@
 // Notifications are checked the same way with PalmPay's public key, over every field except `sign`.
 import { createHash, createPrivateKey, createPublicKey, randomBytes, sign as rsaSign, verify as rsaVerify, type KeyObject } from 'node:crypto'
 
-/** Online payment is on once the PalmPay keys are set; until then orders are pay on delivery or pickup. */
+/** Online payment is on once the PalmPay keys are set; until then customers pay by bank transfer before delivery. */
 export const palmpayConfigured = () => Boolean(process.env.PALMPAY_APP_ID && process.env.PALMPAY_PRIVATE_KEY)
 
 export const PALMPAY_HOSTS = {

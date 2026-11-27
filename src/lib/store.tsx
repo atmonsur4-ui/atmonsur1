@@ -1,17 +1,15 @@
-// Catalogue (from the server), signed-in account, cart and buyer mode (saved in the browser so a refresh keeps them).
+// Catalogue (from the server), signed-in account, and cart (saved in the browser so a refresh keeps it).
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { navigate } from './router'
 import { accountApi, api, type Account, type Catalogue, type Product } from './api'
 import { lineTotal, unitPrice } from '../../server/src/pricing.ts'
 
-type Buyer = 'retail' | 'bulk'
 export type CartLine = { product: Product; qty: number; unit: number; total: number }
 
 type Store = {
   catalogue: Catalogue | null
   catalogueError: string
   retry: () => void
-  buyer: Buyer
-  setBuyer: (b: Buyer) => void
   lines: CartLine[]
   count: number
   subtotal: number
@@ -23,9 +21,15 @@ type Store = {
   cartOpen: boolean
   setCartOpen: (open: boolean) => void
   announce: string
+  /** The last product added (drives the "Added to cart" popup); `key` changes on every add. */
+  added: { product: Product; qty: number; key: number } | null
+  dismissAdded: () => void
   account: Account | null
   accountLoaded: boolean
   setAccount: (a: Account | null) => void
+  favourites: Set<number>
+  /** Signed out: sends the shopper to sign in first. */
+  toggleFavourite: (p: Product) => void
   /** Adds quantities from a past order; returns the names of items no longer sold. */
   reorder: (items: { product_id: number | null; name: string; qty: number }[]) => string[]
 }
@@ -48,12 +52,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null)
   const [catalogueError, setCatalogueError] = useState('')
   const [attempt, setAttempt] = useState(0)
-  const [buyer, setBuyer] = usePersisted<Buyer>('atmonsur-buyer', 'retail')
   const [cart, setCart] = usePersisted<Record<number, number>>('atmonsur-cart', {})
   const [cartOpen, setCartOpen] = useState(false)
   const [announce, setAnnounce] = useState('')
+  const [added, setAdded] = useState<Store['added']>(null)
   const [account, setAccount] = useState<Account | null>(null)
   const [accountLoaded, setAccountLoaded] = useState(false)
+  const [favourites, setFavourites] = useState<Set<number>>(new Set())
+
+  useEffect(() => {
+    if (!account) return setFavourites(new Set())
+    accountApi.favourites().then(r => setFavourites(new Set(r.product_ids)), () => {})
+  }, [account?.email]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     accountApi.me().then(r => setAccount(r.customer), () => {}).finally(() => setAccountLoaded(true))
@@ -76,26 +86,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }), [setCart])
 
   const add = useCallback((p: Product) => setCart(c => {
-    // Bulk buyers start at the wholesale minimum so they get the price they were shown.
-    const qty = Math.min(9999, Math.max((c[p.id] ?? 0) + 1, buyer === 'bulk' ? p.bulk_min_qty : 1))
+    const qty = Math.min(9999, (c[p.id] ?? 0) + 1)
     setAnnounce(`${p.name} added to cart. Quantity ${qty}.`)
+    setAdded({ product: p, qty, key: Date.now() })
     return { ...c, [p.id]: qty }
-  }), [buyer, setCart])
+  }), [setCart])
 
   const addQty = useCallback((p: Product, qty: number) => setCart(c => {
     const total = Math.min(9999, (c[p.id] ?? 0) + Math.max(1, Math.floor(qty)))
     setAnnounce(`${p.name} added to cart. Quantity ${total}.`)
+    setAdded({ product: p, qty: total, key: Date.now() })
     return { ...c, [p.id]: total }
   }), [setCart])
 
   const value: Store = {
     catalogue, catalogueError, retry: () => setAttempt(a => a + 1),
-    buyer, setBuyer, lines,
+    lines,
     count: lines.reduce((s, l) => s + l.qty, 0),
     subtotal: lines.reduce((s, l) => s + l.total, 0),
     add, addQty, setQty, clearCart: () => setCart({}),
-    cartOpen, setCartOpen, announce,
-    account, accountLoaded, setAccount,
+    cartOpen, setCartOpen, announce, added, dismissAdded: () => setAdded(null),
+    account, accountLoaded, setAccount, favourites,
+    toggleFavourite: p => {
+      if (!account) return navigate(`/account?next=${encodeURIComponent(window.location.pathname)}`)
+      const on = !favourites.has(p.id)
+      setFavourites(f => { const n = new Set(f); if (on) n.add(p.id); else n.delete(p.id); return n }) // update now, undo if the server refuses
+      setAnnounce(on ? `${p.name} saved to favourites.` : `${p.name} removed from favourites.`)
+      accountApi.setFavourite(p.id, on).catch(() => setFavourites(f => { const n = new Set(f); if (on) n.delete(p.id); else n.add(p.id); return n }))
+    },
     reorder: items => {
       const sold = new Set(catalogue?.products.map(p => p.id))
       const available = items.filter(i => i.product_id != null && sold.has(i.product_id))

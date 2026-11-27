@@ -160,3 +160,41 @@ export function imageType(b: Uint8Array): 'image/jpeg' | 'image/png' | 'image/we
   if (b.length > 12 && ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp'
   return null
 }
+
+// ---- Wholesale (pallet / truck) quote requests ----
+
+export const QUOTE_SIZES = ['1 pallet', '2 pallets', '3 pallets', 'Half truck', 'Full truck'] as const
+export type QuoteInput = { name: string; business: string; phone: string; email: string; location: string; size: string; products: string; notes: string }
+
+export function parseQuote(body: unknown): Result<QuoteInput> & { spam?: boolean } {
+  const b = (body ?? {}) as Record<string, unknown>
+  if (str(b.website, 200)) return { ok: false, error: 'Rejected.', spam: true } // hidden honeypot field humans never fill
+  const v = {
+    name: str(b.name, 100), business: str(b.business, 120), phone: str(b.phone, 20), email: str(b.email, 200).toLowerCase(),
+    location: str(b.location, 200), size: str(b.size, 30), products: str(b.products, 2000), notes: str(b.notes, 1000),
+  }
+  if (v.name.length < 2 || v.name.length > 100) return { ok: false, error: 'Please enter your full name.' }
+  if (v.business.length > 120) return { ok: false, error: 'Business name is too long.' }
+  if (!PHONE.test(v.phone)) return { ok: false, error: 'Please enter a valid phone number.' }
+  if (!EMAIL.test(v.email) || v.email.length > 200) return { ok: false, error: 'Please enter a valid email address.' }
+  if (!(QUOTE_SIZES as readonly string[]).includes(v.size)) return { ok: false, error: 'Please choose an order size.' }
+  if (v.products.length < 3 || v.products.length > 2000) return { ok: false, error: 'Please list the products you need.' }
+  if (v.location.length < 2 || v.location.length > 200) return { ok: false, error: 'Please tell us where the goods should go.' }
+  if (v.notes.length > 1000) return { ok: false, error: 'Notes are too long.' }
+  return { ok: true, value: v }
+}
+
+// ---- Saved addresses ----
+
+export type AddressInput = { label: string; delivery_zone: string; address: string | null; city: string | null; is_default: boolean }
+
+/** `needsAddress` comes from the chosen delivery option (pickup needs no street address). */
+export function parseAddress(body: unknown, needsAddress: boolean): Result<AddressInput> {
+  const b = (body ?? {}) as Record<string, unknown>
+  const v = { label: str(b.label, 40), delivery_zone: str(b.delivery_zone, 40), address: str(b.address, 300) || null, city: str(b.city, 100) || null, is_default: b.is_default === true || b.is_default === 'on' }
+  if (!v.label || v.label.length > 40) return { ok: false, error: 'Give the address a short name, e.g. Shop or Home.' }
+  if (!v.delivery_zone) return { ok: false, error: 'Choose a delivery option.' }
+  if (needsAddress && ((v.address?.length ?? 0) < 5 || !v.city)) return { ok: false, error: 'Enter the street address and town / city.' }
+  if ((v.address?.length ?? 0) > 300 || (v.city?.length ?? 0) > 100) return { ok: false, error: 'Address is too long.' }
+  return { ok: true, value: needsAddress ? v : { ...v, address: null, city: null } }
+}

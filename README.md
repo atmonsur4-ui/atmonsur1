@@ -9,9 +9,10 @@ Online store for Atmonsur Multiglobal Resources Ltd: retail and wholesale orderi
 | Website (`src/`) | React + Vite + Tailwind. Built into `dist/` by `npm run build`. |
 | Server (`server/src/`) | One small Node.js server ([Hono](https://hono.dev)). It serves the website, the `/api` the website uses, PalmPay payment notifications and the `/admin` pages. |
 | Database | PostgreSQL. Tables are created automatically on first start, with starter products. |
-| Payments | **Until PalmPay is set up:** customers order online and **pay on delivery or at pickup** (cash or transfer); you mark orders paid in admin. **Once the PalmPay keys are added:** customers pay online on [PalmPay Checkout](https://docs.palmpay.com/en/pay-ins-palmpay-checkout-instruction). It switches automatically. |
-| Product pages | Each product has its own page at `/product/<number>-<name>`, with retail and wholesale prices, a quantity picker, a description and related products. Shared links show the product's name, description and photo in WhatsApp, Facebook and Google. |
-| Customer accounts | Optional sign-up for customers: order history with delivery status, “Order again”, saved delivery details. Guests can still check out. |
+| Payments | Customers always **pay before delivery**. **Until PalmPay is set up:** they pay by **bank transfer** to your account (details shown after ordering); you confirm the money arrived and mark the order paid in admin before releasing goods. **Once the PalmPay keys are added:** they pay online on [PalmPay Checkout](https://docs.palmpay.com/en/pay-ins-palmpay-checkout-instruction). It switches automatically. |
+| Product pages | Each product has its own page at `/product/<number>-<name>`, with its price, bulk price, a quantity picker, a description, delivery options and related products. Shared links show the product's name, description and photo in WhatsApp, Facebook and Google. |
+| Bulk & wholesale | `/wholesale`: everything is sold by the roll, carton or pack. **Bulk buyer prices** apply automatically from each product's minimum (5–77 for drinks), in a table where customers pick quantities. **Wholesale** by pallet (1–3) or truck (half/full) is by quotation: customers send a request form that lands in Enquiries and your email. |
+| Customer accounts | Optional; guests can still check out (checkout asks *guest or sign in* first). Accounts have an **Overview** (orders, total spent, latest order), **Orders** (status, view, order again), **Addresses** (up to 10, one default, picked at checkout; new checkout addresses are saved), **Favourites** (♥ on products) and **Settings** (details, password, sign out everywhere, delete account). |
 | Emails | [Resend](https://resend.com) emails you each paid order and enquiry, and sends customers their email-confirmation and password-reset links. |
 
 **Hosting:** the site needs its server running, not just the website files. Two tested setups:
@@ -45,15 +46,13 @@ How a purchase works: the customer fills the cart → checkout picks a delivery 
 8. **Tell Google about the site:** add it in [Google Search Console](https://search.google.com/search-console) and submit `https://<your-site>/sitemap.xml`. That file lists every product and updates itself.
 9. **Before launch, review** the privacy policy and terms text in `src/pages/Legal.tsx`. They're a plain-language starting point, not legal advice.
 
-## Running without PalmPay (pay on delivery)
+## Paying before delivery (until PalmPay is live)
 
-Until `PALMPAY_APP_ID` and `PALMPAY_PRIVATE_KEY` are set, the store runs in **pay-on-delivery mode**:
-- Checkout shows **Place order** instead of a payment button, and tells the customer they'll pay by cash or bank transfer on delivery or when they collect.
-- You get an email for each order ("New order … (pay on delivery)") if email is set up. Orders also appear in `/admin/orders` under **To fulfil**.
-- **Call the customer to confirm**, deliver or hand over the goods, collect payment, then open the order in admin and press **Mark as paid**.
-- The site's wording ("Pay on delivery or at pickup") follows the mode everywhere: home page, cart, checkout, product pages and footer.
-
-When your PalmPay account is approved, add the PalmPay variables and redeploy. New orders then require online payment, while orders placed earlier keep their pay-on-delivery status.
+Until `PALMPAY_APP_ID` and `PALMPAY_PRIVATE_KEY` are set, customers pay by **bank transfer before delivery**:
+- Set `BANK_NAME`, `BANK_ACCOUNT_NUMBER` and `BANK_ACCOUNT_NAME` (Vercel → Settings → Environment Variables, then redeploy). After placing an order the customer sees these details, the exact amount and their order reference (to use as the transfer description), with copy buttons. If they aren't set, the customer is told you'll call them with the details.
+- Checkout shows **Place order**. You get an email for each order ("New order … (awaiting transfer)") if email is set up.
+- In admin, these orders sit under **Awaiting transfer** (and on the dashboard). **Check your bank for the order reference, then open the order and press *Mark as paid*.** Only then does it move to **To fulfil**. Never release goods for an order that isn't marked paid.
+- When your PalmPay account is approved, add the PalmPay variables and redeploy: new orders are then paid online at checkout.
 
 ## Deploying on Vercel
 
@@ -61,7 +60,7 @@ When your PalmPay account is approved, add the PalmPay variables and redeploy. N
 
 1. **Project settings → Build and Deployment:** set *Framework Preset* to **Other**, and turn off any *Output Directory* override (e.g. `dist`). Otherwise Vercel serves only the website files and products never load, which is what an empty "Best sellers" section means.
 2. **Database:** in your Vercel project, *Storage → Create Database → Neon*. This sets `DATABASE_URL` for you. Use the **pooled** connection string (its host contains `-pooler`), because many function instances may connect at once.
-3. **Environment variables** (*Settings → Environment Variables*, Production). **Required:** `DATABASE_URL` (set by step 2), `SITE_URL` (e.g. `https://atmonsur.vercel.app`, no trailing slash), `ADMIN_PASSWORD` (12+ characters) and `NODE_ENV=production`. **Recommended:** `RESEND_API_KEY`, `OWNER_EMAIL` and `NOTIFY_FROM`, so you're emailed about orders. **Later:** `PALMPAY_ENV`, `PALMPAY_APP_ID`, `PALMPAY_PRIVATE_KEY` and `PALMPAY_PUBLIC_KEY` turn on online payment. Without them the store takes pay-on-delivery orders. **Redeploy** after changing variables.
+3. **Environment variables** (*Settings → Environment Variables*, Production). **Required:** `DATABASE_URL` (set by step 2), `SITE_URL` (e.g. `https://atmonsur.vercel.app`, no trailing slash), `ADMIN_PASSWORD` (12+ characters) and `NODE_ENV=production`. **Recommended:** `BANK_NAME`, `BANK_ACCOUNT_NUMBER` and `BANK_ACCOUNT_NAME` (shown to customers paying by transfer), and `RESEND_API_KEY`, `OWNER_EMAIL` and `NOTIFY_FROM`, so you're emailed about orders and quote requests. **Later:** `PALMPAY_ENV`, `PALMPAY_APP_ID`, `PALMPAY_PRIVATE_KEY` and `PALMPAY_PUBLIC_KEY` turn on online payment. Without them customers pay by bank transfer before delivery. **Redeploy** after changing variables.
 4. **Check:** `https://<your-site>/api/catalogue` should show your products as JSON, and refreshing `/shop` should not give a 404. If every page says *The store's server could not start*, the message under it names the problem, usually `DATABASE_URL`.
 5. **PalmPay IP whitelist (production only):** PalmPay only accepts production requests from whitelisted IP addresses, and Vercel functions don't have fixed outgoing IPs unless you add Vercel's paid *Static IPs* feature. Without it, use the sandbox on Vercel, and either add Static IPs or host on Render (which lists fixed outgoing IPs) before switching `PALMPAY_ENV` to `production`. Confirm with `npm run palmpay:check`.
 
@@ -69,7 +68,7 @@ The request rate limits are counted per function instance on Vercel, so they're 
 
 ## Day to day
 
-- **Admin sign-in** is at `/admin`. You stay signed in for 12 hours on that device; use **Log out** on shared computers. Changing `ADMIN_PASSWORD` (and redeploying) signs out every device. The **Dashboard** shows orders to fulfil, sales today and this month, money to collect from pay-on-delivery orders, and new enquiries.
+- **Admin sign-in** is at `/admin`. You stay signed in for 12 hours on that device; use **Log out** on shared computers. Changing `ADMIN_PASSWORD` (and redeploying) signs out every device. The **Dashboard** shows orders to fulfil, sales today and this month, orders awaiting bank transfer, and new enquiries.
 
 - **New paid order:** you get an email (if Resend is set up), and every payment also shows in your PalmPay merchant portal. Open the order in `/admin/orders`, call the customer, and mark it *dispatched* and then *delivered*.
 - **Refunds** are done in the PalmPay merchant portal. Marking an order *cancelled* in admin doesn't move money.

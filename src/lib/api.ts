@@ -4,10 +4,11 @@ export type Product = {
   badge: string | null; image_url: string | null; art_kind: string; color: string; description: string | null
 }
 export type Zone = { id: string; name: string; fee_kobo: number; needs_address: boolean }
-// payments: 'palmpay' once the store's PalmPay keys are set, otherwise customers pay on delivery or pickup.
-export type Catalogue = { categories: Category[]; products: Product[]; zones: Zone[]; payments: 'palmpay' | 'on_delivery' }
+// payments: 'palmpay' once the store's PalmPay keys are set; otherwise customers pay by bank transfer before delivery.
+export type Bank = { name: string; account_number: string; account_name: string }
+export type Catalogue = { categories: Category[]; products: Product[]; zones: Zone[]; payments: 'palmpay' | 'transfer'; bank: Bank | null }
 export type OrderSummary = {
-  reference: string; status: 'pending' | 'paid' | 'failed'; payment_method: 'palmpay' | 'on_delivery'; first_name: string; delivery: string
+  reference: string; status: 'pending' | 'paid' | 'failed'; payment_method: 'palmpay' | 'transfer'; first_name: string; delivery: string
   items: { name: string; pack: string; qty: number; line_total_kobo: number }[]
   subtotal_kobo: number; delivery_fee_kobo: number; total_kobo: number
 }
@@ -24,12 +25,14 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
   return data as T
 }
 
-export type Account = {
-  name: string; email: string; phone: string; email_verified: boolean
-  address: string | null; city: string | null; delivery_zone: string | null
+export type Account = { name: string; email: string; phone: string; email_verified: boolean; member_since: string }
+export type SavedAddress = { id: number; label: string; delivery_zone: string; address: string | null; city: string | null; is_default: boolean }
+export type AccountSummary = {
+  orders: number; spent_kobo: number; addresses: number
+  last_order: { reference: string; status: string; payment_method: string; fulfilment: string; created_at: string; total_kobo: number } | null
 }
 export type PastOrder = {
-  reference: string; status: 'pending' | 'paid'; payment_method: 'palmpay' | 'on_delivery'; fulfilment: string; created_at: string; delivery: string; total_kobo: number
+  reference: string; status: 'pending' | 'paid'; payment_method: 'palmpay' | 'transfer'; fulfilment: string; created_at: string; delivery: string; total_kobo: number
   items: { product_id: number | null; name: string; pack: string; qty: number; line_total_kobo: number }[]
 }
 type WithAccount = { customer: Account }
@@ -46,6 +49,14 @@ export const accountApi = {
   profile: (body: unknown) => call<WithAccount>('/api/account/profile', body),
   password: (current: string, password: string) => call<{ ok: true }>('/api/account/password', { current, password }),
   orders: () => call<{ orders: PastOrder[] }>('/api/account/orders'),
+  summary: () => call<AccountSummary>('/api/account/summary'),
+  addresses: () => call<{ addresses: SavedAddress[] }>('/api/account/addresses'),
+  saveAddress: (body: unknown, id?: number) => call<{ ok: true }>(id ? `/api/account/addresses/${id}` : '/api/account/addresses', body),
+  deleteAddress: (id: number) => call<{ ok: true }>(`/api/account/addresses/${id}/delete`, {}),
+  favourites: () => call<{ product_ids: number[] }>('/api/account/favourites'),
+  setFavourite: (productId: number, on: boolean) => call<{ ok: true }>(`/api/account/favourites/${productId}`, { on }),
+  logoutEverywhere: () => call<{ ok: true }>('/api/account/logout-everywhere', {}),
+  deleteAccount: (password: string) => call<{ ok: true }>('/api/account/delete', { password }),
 }
 
 export const api = {
@@ -53,6 +64,7 @@ export const api = {
   checkout: (body: unknown) => call<{ checkout_url: string; reference: string }>('/api/checkout', body),
   order: (reference: string) => call<OrderSummary>(`/api/orders/${encodeURIComponent(reference)}`),
   enquiry: (body: unknown) => call<{ ok: true }>('/api/enquiries', body),
+  wholesaleQuote: (body: unknown) => call<{ ok: true }>('/api/wholesale-quote', body),
 }
 
 export const formatKobo = (kobo: number) => `₦${(kobo / 100).toLocaleString('en-NG')}`

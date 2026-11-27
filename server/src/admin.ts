@@ -155,18 +155,18 @@ const back = (path: string, msg: string) => `${path}${path.includes('?') ? '&' :
 admin.get('/', async c => {
   const lagosStart = (unit: 'day' | 'month') => sql`(date_trunc(${unit}, now() at time zone 'Africa/Lagos') at time zone 'Africa/Lagos')`
   const [s] = await sql`select
-      count(*) filter (where fulfilment = 'new' and (status = 'paid' or (payment_method = 'on_delivery' and status = 'pending')))::int as to_fulfil,
+      count(*) filter (where fulfilment = 'new' and status = 'paid')::int as to_fulfil,
       count(*) filter (where fulfilment = 'dispatched' and status <> 'failed')::int as on_the_way,
       coalesce(sum(total_kobo) filter (where status = 'paid' and paid_at >= ${lagosStart('day')}), 0)::bigint as today,
       count(*) filter (where status = 'paid' and paid_at >= ${lagosStart('day')})::int as today_orders,
       coalesce(sum(total_kobo) filter (where status = 'paid' and paid_at >= ${lagosStart('month')}), 0)::bigint as month,
       count(*) filter (where status = 'paid' and paid_at >= ${lagosStart('month')})::int as month_orders,
-      coalesce(sum(total_kobo) filter (where payment_method = 'on_delivery' and status = 'pending' and fulfilment <> 'cancelled'), 0)::bigint as to_collect,
-      count(*) filter (where payment_method = 'on_delivery' and status = 'pending' and fulfilment <> 'cancelled')::int as to_collect_orders
+      coalesce(sum(total_kobo) filter (where payment_method = 'transfer' and status = 'pending' and fulfilment <> 'cancelled'), 0)::bigint as awaiting,
+      count(*) filter (where payment_method = 'transfer' and status = 'pending' and fulfilment <> 'cancelled')::int as awaiting_orders
     from orders`
   const [{ enquiries }] = await sql`select count(*)::int as enquiries from enquiries where not handled`
   const [{ products, drafts }] = await sql`select count(*) filter (where active)::int as products, count(*) filter (where not active)::int as drafts from products`
-  const recent = await sql`select * from orders where (status = 'paid' or (payment_method = 'on_delivery' and status = 'pending'))
+  const recent = await sql`select * from orders where (status = 'paid' or (payment_method = 'transfer' and status = 'pending'))
     and fulfilment in ('new', 'dispatched') order by created_at desc limit 8`
   const stat = (href: string, label: string, value: string, sub: string, alert = false) =>
     html`<a class="stat ${alert ? 'alert' : ''}" href="${href}"><small>${label}</small><b>${value}</b><span>${sub}</span></a>`
@@ -177,13 +177,13 @@ admin.get('/', async c => {
       ${stat('/admin/orders?status=all', 'On the way', String(s.on_the_way), 'dispatched, not yet delivered')}
       ${stat('/admin/orders?status=paid', 'Sales today', naira(Number(s.today)), `${s.today_orders} paid order${s.today_orders === 1 ? '' : 's'}`)}
       ${stat('/admin/orders?status=paid', 'Sales this month', naira(Number(s.month)), `${s.month_orders} paid order${s.month_orders === 1 ? '' : 's'}`)}
-      ${stat('/admin/orders', 'To collect', naira(Number(s.to_collect)), `${s.to_collect_orders} pay-on-delivery order${s.to_collect_orders === 1 ? '' : 's'}`, s.to_collect_orders > 0)}
+      ${stat('/admin/orders?status=awaiting', 'Awaiting transfer', naira(Number(s.awaiting)), `${s.awaiting_orders} order${s.awaiting_orders === 1 ? '' : 's'} to check against your bank`, s.awaiting_orders > 0)}
       ${stat('/admin/enquiries', 'New enquiries', String(enquiries), 'not yet handled', enquiries > 0)}
     </div>
     <h2>Orders needing attention</h2>
     <table><thead><tr><th>Date</th><th>Customer</th><th>Delivery</th><th>Total</th><th>Payment</th><th>Fulfilment</th></tr></thead><tbody>
     ${recent.length ? recent.map(o => html`<tr><td><a href="/admin/orders/${o.reference}">${when(o.created_at)}</a></td><td>${o.customer_name}<br><span class="muted">${o.phone}</span></td><td>${o.delivery_zone_name}</td><td>${naira(o.total_kobo)}</td>
-      <td><span class="pill ${o.status}">${o.status === 'pending' ? 'pay on delivery' : o.status}</span></td><td><span class="pill ${o.fulfilment}">${o.fulfilment}</span></td></tr>`)
+      <td><span class="pill ${o.status}">${o.status === 'pending' ? 'awaiting transfer' : o.status}</span></td><td><span class="pill ${o.fulfilment}">${o.fulfilment}</span></td></tr>`)
       : html`<tr><td colspan="6" class="muted">Nothing waiting. New orders will appear here.</td></tr>`}
     </tbody></table>
     <p class="muted" style="margin-top:14px">${products} product${products === 1 ? '' : 's'} on sale · <a href="/admin/products/new">Add a product</a> · <a href="/admin/delivery">Delivery fees</a></p>
@@ -192,16 +192,16 @@ admin.get('/', async c => {
 
 // ---- Orders ----
 admin.get('/orders', async c => {
-  // "open" = orders to deal with: paid online, or placed to pay on delivery (not cancelled).
+  // "open" = paid orders to fulfil; "awaiting" = transfer orders whose money hasn't been confirmed yet.
   const status = c.req.query('status') ?? 'open'
   const orders = status === 'all' ? await sql`select * from orders order by created_at desc limit 200`
-    : status === 'open' ? await sql`select * from orders where (status = 'paid' or (payment_method = 'on_delivery' and status = 'pending'))
-        and fulfilment <> 'cancelled' order by created_at desc limit 200`
+    : status === 'open' ? await sql`select * from orders where status = 'paid' and fulfilment in ('new', 'dispatched') order by created_at desc limit 200`
+    : status === 'awaiting' ? await sql`select * from orders where payment_method = 'transfer' and status = 'pending' and fulfilment <> 'cancelled' order by created_at desc limit 200`
     : await sql`select * from orders where status = ${status} order by created_at desc limit 200`
-  const payLabel = (o: Record<string, any>) => (o.status === 'pending' && o.payment_method === 'on_delivery' ? 'pay on delivery' : o.status)
+  const payLabel = (o: Record<string, any>) => (o.status === 'pending' && o.payment_method === 'transfer' ? 'awaiting transfer' : o.status)
   return c.html(page('Orders', html`
-    <p class="filters">Show: ${[['open', 'To fulfil'], ['paid', 'Paid'], ['pending', 'Unpaid'], ['failed', 'Failed'], ['all', 'All']].map(([s, label]) => html`<a href="?status=${s}" ${s === status ? html`aria-current="page" style="font-weight:700"` : ''}>${label}</a>`)}</p>
-    <p class="muted"><b>To fulfil</b> shows orders paid online plus <b>pay on delivery</b> orders. Call pay-on-delivery customers to confirm, collect payment on delivery or pickup, then mark the order paid. <b>Unpaid</b> also lists customers who started PalmPay checkout but didn't pay.</p>
+    <p class="filters">Show: ${[['open', 'To fulfil'], ['awaiting', 'Awaiting transfer'], ['paid', 'Paid'], ['pending', 'Unpaid'], ['failed', 'Failed'], ['all', 'All']].map(([s, label]) => html`<a href="?status=${s}" ${s === status ? html`aria-current="page" style="font-weight:700"` : ''}>${label}</a>`)}</p>
+    <p class="muted">Customers always pay <b>before</b> delivery. <b>To fulfil</b> lists paid orders to deliver or hand over. <b>Awaiting transfer</b> lists orders whose bank transfer you haven't confirmed yet: check your bank for the order reference, then open the order and press <i>Mark as paid</i>. Don't release goods before that.</p>
     <table><thead><tr><th>Date</th><th>Reference</th><th>Customer</th><th>Delivery</th><th>Total</th><th>Payment</th><th>Fulfilment</th></tr></thead><tbody>
     ${orders.length ? orders.map(o => html`<tr><td>${when(o.created_at)}</td><td><a href="/admin/orders/${o.reference}">${o.reference}</a></td><td>${o.customer_name}<br><span class="muted">${o.phone}</span></td><td>${o.delivery_zone_name}</td><td>${naira(o.total_kobo)}</td><td><span class="pill ${o.status}">${payLabel(o)}</span></td><td><span class="pill ${o.fulfilment}">${o.fulfilment}</span></td></tr>`) : html`<tr><td colspan="7" class="muted">No orders here yet.</td></tr>`}
     </tbody></table>`, c.req.query('msg')))
@@ -211,9 +211,9 @@ admin.get('/orders/:reference', async c => {
   const o = await getOrder(c.req.param('reference'))
   if (!o) return c.html(page('Order not found', html`<a href="/admin/orders">Back to orders</a>`), 404)
   return c.html(page(`Order ${o.reference}`, html`
-    <div class="card"><p><span class="pill ${o.status}">Payment: ${o.status === 'pending' && o.payment_method === 'on_delivery' ? 'pay on delivery (not paid yet)' : o.status}</span>
-      ${o.paid_at ? html`<span class="muted">paid ${when(o.paid_at)} · ${o.payment_method === 'on_delivery' ? 'collected on delivery or pickup' : html`PalmPay order ${o.payment_reference}`}</span>` : ''}</p>
-      ${o.payment_method === 'on_delivery' && o.status === 'pending' ? html`<form method="post" action="/admin/orders/${o.reference}/paid" class="inline"><button>Mark as paid (${naira(o.total_kobo)} received)</button></form>` : ''}
+    <div class="card"><p><span class="pill ${o.status}">Payment: ${o.status === 'pending' && o.payment_method === 'transfer' ? 'awaiting bank transfer (not paid yet)' : o.status}</span>
+      ${o.paid_at ? html`<span class="muted">paid ${when(o.paid_at)} · ${o.payment_method === 'transfer' ? 'bank transfer confirmed' : html`PalmPay order ${o.payment_reference}`}</span>` : ''}</p>
+      ${o.payment_method === 'transfer' && o.status === 'pending' ? html`<p class="muted">The customer was asked to transfer <b>${naira(o.total_kobo)}</b> with <b>${o.reference}</b> as the description. Only mark it paid once the money is in your account.</p><form method="post" action="/admin/orders/${o.reference}/paid" class="inline"><button>Mark as paid (${naira(o.total_kobo)} transfer received)</button></form>` : ''}
     <p><b>${o.customer_name}</b> <span class="pill">${o.customer_id ? 'account' : 'guest'}</span><br><a href="tel:${o.phone}">${o.phone}</a> · <a href="mailto:${o.email}">${o.email}</a></p>
     <p><b>${o.delivery_zone_name}</b>${o.address ? html`<br>${o.address}, ${o.city}` : ''}</p>${o.notes ? html`<p><b>Notes:</b> ${o.notes}</p>` : ''}
     <p class="muted">Placed ${when(o.created_at)}</p></div>
@@ -227,11 +227,11 @@ admin.get('/orders/:reference', async c => {
     <p><a href="/admin/orders">← All orders</a></p>`, c.req.query('msg')))
 })
 
-// Pay-on-delivery orders: the owner records the cash or transfer once it's received.
+// Bank-transfer orders: the owner confirms the money arrived before releasing the goods.
 admin.post('/orders/:reference/paid', async c => {
   const ref = c.req.param('reference')
   const done = await sql`update orders set status = 'paid', paid_at = now()
-    where reference = ${ref} and payment_method = 'on_delivery' and status = 'pending' returning id`
+    where reference = ${ref} and payment_method = 'transfer' and status = 'pending' returning id`
   return c.redirect(back(`/admin/orders/${ref}`, done.length ? 'Marked as paid' : 'Error: this order can not be marked paid here'))
 })
 
@@ -248,7 +248,7 @@ admin.get('/products', async c => {
   const products = await sql`select * from products order by sort, id`
   return c.html(page('Products', html`
     <p><a href="/admin/products/new">+ Add a product</a></p>
-    <table><thead><tr><th></th><th>Product</th><th>Category</th><th>Retail</th><th>Wholesale</th><th>Shown on site</th></tr></thead><tbody>
+    <table><thead><tr><th></th><th>Product</th><th>Category</th><th>Price</th><th>Bulk price</th><th>Shown on site</th></tr></thead><tbody>
     ${products.map(p => html`<tr><td>${p.image_url ? html`<img class="thumb" src="${p.image_url}" alt="" loading="lazy">` : html`<span class="thumb empty" title="No photo yet">No photo</span>`}</td><td><a href="/admin/products/${p.id}">${p.name}</a><br><span class="muted">${p.pack}</span></td><td>${p.category}</td><td>${naira(p.price_kobo)}</td><td>${naira(p.bulk_price_kobo)} <span class="muted">from ${p.bulk_min_qty}</span></td><td>${p.active ? 'Yes' : html`<span class="pill failed">Hidden</span>`}</td></tr>`)}
     </tbody></table>`, c.req.query('msg')))
 })
@@ -262,8 +262,8 @@ const productForm = async (p: Record<string, any> | null, error = '') => {
       <div class="row"><div><label for="category">Category</label><select id="category" name="category">${categories.map(c => html`<option ${c.name === v.category ? 'selected' : ''}>${c.name}</option>`)}</select></div>
         <div><label for="pack">Pack size</label><input id="pack" name="pack" required maxlength="80" value="${v.pack ?? ''}" placeholder="75cl × 12 bottles"></div></div>
       <div class="row"><div><label for="price">Retail price (₦)</label><input id="price" name="price" required inputmode="decimal" value="${v.price_kobo ? kobo(v.price_kobo) : v.price ?? ''}"></div>
-        <div><label for="bulk_price">Wholesale price (₦)</label><input id="bulk_price" name="bulk_price" required inputmode="decimal" value="${v.bulk_price_kobo ? kobo(v.bulk_price_kobo) : v.bulk_price ?? ''}"></div>
-        <div><label for="bulk_min_qty">Wholesale from (packs)</label><input id="bulk_min_qty" name="bulk_min_qty" type="number" min="1" required value="${v.bulk_min_qty}"></div></div>
+        <div><label for="bulk_price">Bulk buyer price (₦)</label><input id="bulk_price" name="bulk_price" required inputmode="decimal" value="${v.bulk_price_kobo ? kobo(v.bulk_price_kobo) : v.bulk_price ?? ''}"></div>
+        <div><label for="bulk_min_qty">Bulk price from (quantity, e.g. 5–77)</label><input id="bulk_min_qty" name="bulk_min_qty" type="number" min="1" required value="${v.bulk_min_qty}"></div></div>
       <div class="row"><div><label for="badge">Badge (optional)</label><input id="badge" name="badge" maxlength="30" value="${v.badge ?? ''}" placeholder="Bestseller"></div>
         <div><label for="sort">Order on site</label><input id="sort" name="sort" type="number" value="${v.sort}"></div></div>
       <label for="description">Description for the product page (optional)</label><textarea id="description" name="description" rows="4" maxlength="2000" placeholder="What it is, brand, ingredients or uses, storage, carton contents…">${v.description ?? ''}</textarea>

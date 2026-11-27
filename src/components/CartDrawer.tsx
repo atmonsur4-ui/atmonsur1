@@ -46,7 +46,7 @@ export function CartDrawer() {
           <div className="cart-thumb"><ProductImage product={p} /></div>
           <div>
             <button className="cart-name" onClick={() => go(productPath(p))}>{p.name}</button><small>{p.pack}</small>
-            <span>{formatKobo(unit)} each{unit === p.bulk_price_kobo ? ' · wholesale' : ''}</span>
+            <span>{formatKobo(unit)} each{unit === p.bulk_price_kobo ? ' · bulk price' : ''}</span>
             {qty < p.bulk_min_qty && <small className="bulk-hint">Add {p.bulk_min_qty - qty} more for {formatKobo(p.bulk_price_kobo)} each</small>}
             <div className="cart-item-row">
               <div className="qty">
@@ -65,7 +65,7 @@ export function CartDrawer() {
         <div><span>Subtotal</span><b>{formatKobo(subtotal)}</b></div>
         <p>{deliverySummary(catalogue?.zones ?? []) || 'Delivery'}. You choose at checkout.</p>
         <button className="checkout" onClick={() => go('/checkout')}>Proceed to checkout <Icon name="arrow" /></button>
-        <span className="secure"><Icon name="shield" size={15} /> {catalogue?.payments === 'palmpay' ? 'Secure payment with PalmPay' : 'Pay on delivery or when you collect'}</span>
+        <span className="secure"><Icon name="shield" size={15} /> {catalogue?.payments === 'palmpay' ? 'Secure payment with PalmPay' : 'Pay by bank transfer before delivery'}</span>
       </div>}
     </aside>
   </>

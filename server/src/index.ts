@@ -10,7 +10,7 @@ import { migrate, sql, type PricedRow } from './db.ts'
 import { getOrder, notifyNewOrder, settleOrder, type PalmPayOrder } from './orders.ts'
 import { notifyOwner } from './notify.ts'
 import { lineTotal, unitPrice } from './pricing.ts'
-import { parseCheckout, parseEnquiry, REFERENCE } from './validate.ts'
+import { parseCheckout, parseEnquiry, parseQuote, REFERENCE } from './validate.ts'
 import { newReference, notificationValid, palmpay, palmpayConfigured } from './palmpay.ts'
 import { admin } from './admin.ts'
 import { accounts, currentCustomer } from './accounts.ts'
@@ -40,7 +40,10 @@ app.get('/api/catalogue', async c => {
     sql`select id, name, fee_kobo, needs_address from delivery_zones where active order by sort, id`,
   ])
   c.header('Cache-Control', 'public, max-age=60')
-  return c.json({ categories, products, zones, payments: palmpayConfigured() ? 'palmpay' : 'on_delivery' })
+  // Shown to customers paying by transfer; null until the owner sets the BANK_* variables.
+  const bank = process.env.BANK_ACCOUNT_NUMBER
+    ? { name: process.env.BANK_NAME ?? '', account_number: process.env.BANK_ACCOUNT_NUMBER, account_name: process.env.BANK_ACCOUNT_NAME ?? '' } : null
+  return c.json({ categories, products, zones, payments: palmpayConfigured() ? 'palmpay' : 'transfer', bank })
 })
 
 // Prices and delivery fees always come from the database here, never from the browser.
@@ -63,7 +66,7 @@ app.post('/api/checkout', rateLimit(10), async c => {
   const total = subtotal + zone.fee_kobo
   const reference = newReference()
   const account = await currentCustomer(c) // null for guest checkout
-  const paymentMethod = palmpayConfigured() ? 'palmpay' : 'on_delivery'
+  const paymentMethod = palmpayConfigured() ? 'palmpay' : 'transfer'
 
   const orderId = await sql.begin(async tx => {
     const [order] = await tx`insert into orders ${tx({
@@ -73,14 +76,19 @@ app.post('/api/checkout', rateLimit(10), async c => {
       subtotal_kobo: subtotal, delivery_fee_kobo: zone.fee_kobo, total_kobo: total,
     })} returning id`
     await tx`insert into order_items ${tx(lines.map(l => ({ ...l, order_id: order.id })))}`
-    // Remember the delivery details on the account so the next checkout is pre-filled.
-    if (account) await tx`update customers set phone = ${customer.phone}, delivery_zone = ${zone.id},
-      address = coalesce(${zone.needs_address ? customer.address : null}, address), city = coalesce(${zone.needs_address ? customer.city : null}, city)
-      where id = ${account.id}`
+    // Signed-in customers: save a new delivery address to their address book so the next checkout can reuse it.
+    if (account && zone.needs_address) {
+      const [{ n }] = await tx`select count(*)::int as n from customer_addresses where customer_id = ${account.id}`
+      const [same] = await tx`select 1 from customer_addresses where customer_id = ${account.id} and delivery_zone = ${zone.id}
+        and lower(address) = lower(${customer.address}) and lower(city) = lower(${customer.city})`
+      if (!same && n < 10) await tx`insert into customer_addresses ${tx({
+        customer_id: account.id, label: customer.city || 'Delivery address', delivery_zone: zone.id, address: customer.address, city: customer.city, is_default: n === 0,
+      })}`
+    }
     return order.id as number
   })
 
-  if (paymentMethod === 'on_delivery') { // no online payment yet: the order is placed now and paid on delivery or pickup
+  if (paymentMethod === 'transfer') { // no online payment yet: the order is placed now and paid by bank transfer before delivery
     await notifyNewOrder((await getOrder(reference))!)
     return c.json({ checkout_url: `/order?reference=${reference}`, reference })
   }
@@ -131,6 +139,20 @@ app.post('/api/enquiries', rateLimit(5), async c => {
   const e = parsed.value
   await sql`insert into enquiries ${sql(e)}`
   await notifyOwner(`New enquiry: ${e.subject} (${e.name})`, `${e.message}\n\nName: ${e.name}\nPhone: ${e.phone}\nEmail: ${e.email}\n\nAll enquiries: ${process.env.SITE_URL ?? ''}/admin/enquiries`)
+  return c.json({ ok: true })
+})
+
+// Pallet / truck orders are priced by quotation: saved as an enquiry and emailed to the owner.
+app.post('/api/wholesale-quote', rateLimit(5), async c => {
+  const parsed = parseQuote(await c.req.json().catch(() => null))
+  if (parsed.spam) return c.json({ ok: true }) // look successful to bots
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400)
+  const q = parsed.value
+  const message = [`Order size: ${q.size}`, `Products and quantities:\n${q.products}`, `Deliver to: ${q.location}`,
+    ...(q.business ? [`Business: ${q.business}`] : []), ...(q.notes ? [`Notes: ${q.notes}`] : [])].join('\n\n')
+  await sql`insert into enquiries ${sql({ name: q.name, phone: q.phone, email: q.email, subject: `Wholesale quote: ${q.size}`, message })}`
+  await notifyOwner(`Wholesale quote request: ${q.size} (${q.business || q.name})`,
+    `${message}\n\nName: ${q.name}\nPhone: ${q.phone}\nEmail: ${q.email}\n\nAll enquiries: ${process.env.SITE_URL ?? ''}/admin/enquiries`)
   return c.json({ ok: true })
 })
 

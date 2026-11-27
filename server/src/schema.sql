@@ -121,8 +121,8 @@ create index if not exists sessions_customer on sessions (customer_id);
 -- Product pages: optional longer text shown on the product's own page.
 alter table products add column if not exists description text;
 
--- How the customer pays: 'palmpay' (online, before the order counts) or 'on_delivery' (cash or transfer on delivery or pickup,
--- used while PalmPay isn't set up). On-delivery orders stay status 'pending' until the owner marks them paid in admin.
+-- How the customer pays, always BEFORE delivery: 'palmpay' (online at checkout) or 'transfer' (bank transfer to the store,
+-- used while PalmPay isn't set up). Transfer orders stay 'pending' until the owner sees the money and marks them paid.
 alter table orders add column if not exists payment_method text not null default 'palmpay';
 
 -- Product photos uploaded in admin, stored in the database so no extra file-storage service is needed.
@@ -139,3 +139,31 @@ create table if not exists images (
   data bytea not null,
   created_at timestamptz not null default now()
 );
+
+-- Account features: saved delivery addresses and favourite products.
+create table if not exists customer_addresses (
+  id int generated always as identity primary key,
+  customer_id int not null references customers (id) on delete cascade,
+  label text not null,                    -- e.g. 'Shop', 'Home', 'Office'
+  delivery_zone text not null,
+  address text,
+  city text,
+  is_default boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists customer_addresses_customer on customer_addresses (customer_id);
+
+create table if not exists customer_favourites (
+  customer_id int not null references customers (id) on delete cascade,
+  product_id int not null references products (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (customer_id, product_id)
+);
+
+-- Earlier versions kept one address on the customer row: move it into the address book (once; the row is then cleared).
+insert into customer_addresses (customer_id, label, delivery_zone, address, city, is_default)
+  select id, 'Main address', delivery_zone, address, city, true from customers where delivery_zone is not null;
+update customers set delivery_zone = null, address = null, city = null where delivery_zone is not null;
+
+-- Pay-on-delivery was replaced by pay-before-delivery (bank transfer).
+update orders set payment_method = 'transfer' where payment_method = 'on_delivery';
