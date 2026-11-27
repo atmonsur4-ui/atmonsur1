@@ -8,7 +8,8 @@ export const site = () => (process.env.SITE_URL ?? 'http://localhost:3000').repl
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 let shell = ''
-const indexHtml = () => (shell ||= readFileSync('./dist/index.html', 'utf8')) // built by `npm run build`
+// Built by `npm run build`; on Vercel the file sits next to the function (see vercel.ts).
+const indexHtml = () => (shell ||= readFileSync(process.env.INDEX_HTML_PATH ?? './dist/index.html', 'utf8'))
 
 type Meta = { title: string; description: string; image?: string; path: string; jsonLd?: object }
 

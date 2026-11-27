@@ -12,7 +12,8 @@
     "build": "tsc --noEmit && vite build",
     "start": "node --env-file-if-exists=.env server/src/index.ts",
     "test": "node --test server/src/*.test.ts",
-    "palmpay:check": "node --env-file-if-exists=.env server/src/palmpay-check.ts"
+    "palmpay:check": "node --env-file-if-exists=.env server/src/palmpay-check.ts",
+    "build:vercel": "npm run build && node scripts/build-vercel.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",

@@ -14,7 +14,11 @@ Online store for Atmonsur Multiglobal Resources Ltd: retail and wholesale orderi
 | Customer accounts | Optional sign-up for customers: order history with delivery status, “Order again”, saved delivery details. Guests can still check out. |
 | Emails | [Resend](https://resend.com) emails you each paid order and enquiry, and sends customers their email-confirmation and password-reset links. |
 
-**Recommended hosting:** [Render](https://render.com) web service for the server and [Neon](https://neon.tech) for PostgreSQL. Both have free tiers. For a live store, use Render's Starter plan (about $7/month): the free plan sleeps after 15 minutes idle, so the first visitor waits about a minute.
+**Hosting:** the site needs its server running, not just the website files. Two tested setups:
+- **Vercel** (see *Deploying on Vercel* below): the website on Vercel's CDN and the server as one Vercel Function, using `vercel.json` and `npm run build:vercel`.
+- **[Render](https://render.com)** web service, using `render.yaml`. Use the Starter plan (about $7/month) for a live store: the free plan sleeps after 15 minutes idle.
+
+Either way, use [Neon](https://neon.tech) (free tier) for PostgreSQL.
 
 How a purchase works: the customer fills the cart → checkout picks a delivery option → the server re-prices everything from the database and creates a *pending* order → PalmPay's checkout page → back to `/order`. The order is marked *paid* only when PalmPay confirms it (a signed payment notification, or a direct status check with PalmPay), with status *success* and exactly the right amount.
 
@@ -40,6 +44,18 @@ How a purchase works: the customer fills the cart → checkout picks a delivery 
 7. **Go live:** set `PALMPAY_ENV=production` with your production App ID and keys, make sure the server IP is whitelisted, run `npm run palmpay:check` once more, and connect your domain in Render. Do one real low-value purchase and refund it.
 8. **Tell Google about the site:** add it in [Google Search Console](https://search.google.com/search-console) and submit `https://<your-site>/sitemap.xml`. That file lists every product and updates itself.
 9. **Before launch, review** the privacy policy and terms text in `src/pages/Legal.tsx`. They're a plain-language starting point, not legal advice.
+
+## Deploying on Vercel
+
+`vercel.json` tells Vercel to run `npm run build:vercel`. That builds the website and packs the server into one Vercel Function (`scripts/build-vercel.mjs`, using Vercel's [Build Output API](https://vercel.com/docs/build-output-api/v3)). Images and code files come from Vercel's CDN; pages, `/api`, `/admin` and payment notifications go to the function.
+
+1. **Project settings → Build and Deployment:** set *Framework Preset* to **Other**, and turn off any *Output Directory* override (e.g. `dist`). Otherwise Vercel serves only the website files and products never load, which is what an empty "Best sellers" section means.
+2. **Database:** in your Vercel project, *Storage → Create Database → Neon*. This sets `DATABASE_URL` for you. Use the **pooled** connection string (its host contains `-pooler`), because many function instances may connect at once.
+3. **Environment variables** (*Settings → Environment Variables*, Production): `SITE_URL` (e.g. `https://atmonsur.vercel.app`, no trailing slash), `ADMIN_PASSWORD`, `PALMPAY_ENV`, `PALMPAY_APP_ID`, `PALMPAY_PRIVATE_KEY`, `PALMPAY_PUBLIC_KEY`, `RESEND_API_KEY`, `OWNER_EMAIL`, `NOTIFY_FROM`, and `NODE_ENV=production`. **Redeploy** after changing them.
+4. **Check:** `https://<your-site>/api/catalogue` should show your products as JSON, and refreshing `/shop` should not give a 404.
+5. **PalmPay IP whitelist (production only):** PalmPay only accepts production requests from whitelisted IP addresses, and Vercel functions don't have fixed outgoing IPs unless you add Vercel's paid *Static IPs* feature. Without it, use the sandbox on Vercel, and either add Static IPs or host on Render (which lists fixed outgoing IPs) before switching `PALMPAY_ENV` to `production`. Confirm with `npm run palmpay:check`.
+
+The request rate limits are counted per function instance on Vercel, so they're looser there than on a single Render server.
 
 ## Day to day
 

@@ -16,7 +16,7 @@ import { admin } from './admin.ts'
 import { accounts, currentCustomer } from './accounts.ts'
 import { rateLimit } from './rateLimit.ts'
 
-const app = new Hono()
+export const app = new Hono()
 const PALMPAY_NOTIFY_PATH = '/api/palmpay/notify'
 const siteUrl = (c: { req: { url: string } }) => process.env.SITE_URL ?? new URL(c.req.url).origin
 app.use(secureHeaders())
@@ -165,6 +165,8 @@ app.onError((err, c) => {
   return c.req.path.startsWith('/api/') ? c.json({ error: 'Something went wrong. Please try again.' }, 500) : c.text('Something went wrong.', 500)
 })
 
-await migrate()
-const port = Number(process.env.PORT ?? 3000)
-serve({ fetch: app.fetch, port }, () => console.log(`Atmonsur Store running on http://localhost:${port}`))
+await migrate() // once per start (on Vercel: once per function instance)
+if (!process.env.VERCEL) { // on Vercel, server/src/vercel.ts hands requests to `app` instead
+  const port = Number(process.env.PORT ?? 3000)
+  serve({ fetch: app.fetch, port }, () => console.log(`Atmonsur Store running on http://localhost:${port}`))
+}
