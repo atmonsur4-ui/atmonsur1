@@ -38,13 +38,14 @@ export async function productPage(id: number) {
     from products where id = ${id} and active`
   if (!p) return null
   const path = productPath(p)
+  const image = p.image_url?.startsWith('/') ? site() + p.image_url : p.image_url ?? undefined // uploaded photos are site-relative
   const description = p.description?.replace(/\s+/g, ' ').trim().slice(0, 300) // previews show one line
     || `${p.name}, ${p.pack}. ${naira(p.price_kobo)} per pack, or ${naira(p.bulk_price_kobo)} each from ${p.bulk_min_qty} packs. Order online from Atmonsur in Epe, Lagos.`
   return pageHtml({
-    title: `${p.name} (${p.pack}) | Atmonsur Store`, description, path, image: p.image_url ?? undefined,
+    title: `${p.name} (${p.pack}) | Atmonsur Store`, description, path, image,
     jsonLd: {
       '@context': 'https://schema.org', '@type': 'Product', name: p.name, sku: String(p.id), category: p.category, description,
-      ...(p.image_url ? { image: p.image_url } : {}),
+      ...(image ? { image } : {}),
       offers: { '@type': 'Offer', url: site() + path, priceCurrency: 'NGN', price: (p.price_kobo / 100).toFixed(2), availability: 'https://schema.org/InStock' },
     },
   })

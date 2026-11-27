@@ -37,8 +37,8 @@ How a purchase works: the customer fills the cart → checkout picks a delivery 
    - `ADMIN_PASSWORD`: a long password (12+ characters) for `/admin`
    - `RESEND_API_KEY`, `OWNER_EMAIL` and `NOTIFY_FROM`: emails for you (new orders and enquiries) and for customers (confirm email, reset password). **Without these, customers can't reset forgotten passwords.** To email customers, verify your domain in Resend and set `NOTIFY_FROM` to an address on it, e.g. `Atmonsur Store <orders@atmonsur.com>`.
 4. **Check the connection.** In Render's *Shell* tab (or locally with the same values in `.env`) run `npm run palmpay:check`. It creates a ₦1 test order and says either *Keys and signing are correct* or what's wrong (wrong key, App ID, IP whitelist). Nothing is charged. There's no webhook to configure: every order tells PalmPay to notify `https://<your-site>/api/palmpay/notify`.
-5. **Set your real data** at `https://<your-site>/admin` (username `admin`):
-   - **Products:** the starter products and prices are placeholders. Edit them, add photos (any `https://` image link), set each product's wholesale minimum, and write a short description for its product page.
+5. **Set your real data:** sign in at `https://<your-site>/admin`. The username is `admin` (or your `ADMIN_USER`), and the password is your `ADMIN_PASSWORD`.
+   - **Products:** your range (Fizzle, American Cola, Pepsi, Coca-Cola, Bigi, Kivo, Leya, Checkers, Creviva, Hypo, Chikki, rice and Garri Ijebu) is loaded as **hidden drafts** with a ₦1 placeholder price. For each one, open it in *Products*: set the pack size, retail and wholesale prices and the wholesale minimum, **upload a photo**, add a short description, then tick **Show on the website**. Until at least one product is shown, the shop asks customers to call or message you.
    - **Delivery fees:** the starter fees (₦1,500 Epe / ₦4,000 Lagos / ₦8,000 outside Lagos) are placeholders too.
 6. **Test a purchase** in the sandbox (PalmPay's [test tools page](https://docs.palmpay.com/en/test-tools-test-account-secret-key) explains sandbox accounts). The order should show as *paid* in `/admin/orders`.
 7. **Go live:** set `PALMPAY_ENV=production` with your production App ID and keys, make sure the server IP is whitelisted, run `npm run palmpay:check` once more, and connect your domain in Render. Do one real low-value purchase and refund it.
@@ -69,9 +69,12 @@ The request rate limits are counted per function instance on Vercel, so they're 
 
 ## Day to day
 
+- **Admin sign-in** is at `/admin`. You stay signed in for 12 hours on that device; use **Log out** on shared computers. Changing `ADMIN_PASSWORD` (and redeploying) signs out every device. The **Dashboard** shows orders to fulfil, sales today and this month, money to collect from pay-on-delivery orders, and new enquiries.
+
 - **New paid order:** you get an email (if Resend is set up), and every payment also shows in your PalmPay merchant portal. Open the order in `/admin/orders`, call the customer, and mark it *dispatched* and then *delivered*.
 - **Refunds** are done in the PalmPay merchant portal. Marking an order *cancelled* in admin doesn't move money.
 - **Pending orders** are customers who started checkout but didn't pay. They aren't sales.
+- **Product photos:** in *Products*, open a product and use **Upload a photo**. The admin shrinks it to 1200 px in your browser before uploading (a phone photo becomes about 100 to 250 KB) and shows a preview; press *Save product*. Only real JPEG, PNG or WebP files up to 3 MB are accepted. Replacing or removing a photo deletes the old one. Photos are stored in your database (no extra service to set up) and served at `/images/<number>`. Use your own photos of your stock, or official images your suppliers or the brands allow you to use.
 - **Share a product:** copy its page address from the browser. WhatsApp shows its name, description and photo (or the store image if it has no photo). Renaming a product later doesn't break links already shared.
 - **Hide a product** by unticking *Show on the website*. Order history keeps the name and price each customer paid.
 - **Customers** (`/admin/customers`) lists accounts with paid order counts and totals. Order pages show whether an order came from an account or a guest. You never see or set customer passwords: customers reset their own from the login page.
@@ -107,7 +110,7 @@ The signing string is unit-tested against the worked example in PalmPay's docs.
 
 - Prices, wholesale rules and delivery fees are always recalculated on the server. The browser only sends product IDs and quantities.
 - PalmPay payment notifications are accepted only with a valid signature from PalmPay's public key. Requests to PalmPay are signed with your private key. An order counts as paid only with PalmPay status *success* (2) and the exact order total in kobo; a mismatch is emailed to you instead.
-- `/admin` uses a password and rejects form submissions from other websites. Use a strong `ADMIN_PASSWORD`, and only open the admin over `https`.
+- `/admin` has its own sign-in page. The session is an httpOnly cookie signed with a key made from your admin password; it lasts 12 hours. Sign-in is limited to 10 tries per 15 minutes per visitor, and admin forms posted from other websites are rejected. Use a strong `ADMIN_PASSWORD`, and only open the admin over `https`.
 - Public endpoints are rate-limited per visitor. The enquiry form has a hidden spam trap.
 - **Accounts:** passwords are hashed with scrypt and never stored. Login uses an httpOnly, SameSite cookie, and only a hash of its value is kept in the database. API writes must be JSON, which blocks cross-site form attacks. Login has a per-account lockout (8 tries per 15 minutes) and the same error message whether or not the email exists. Reset links last 1 hour, work once, and sign out every other device.
 - **Guest orders join an account only after the customer confirms that email address**, so nobody can see someone else's orders by signing up with their email.

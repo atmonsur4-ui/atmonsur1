@@ -113,3 +113,16 @@ test('product addresses: readable slug, id is what matters', async () => {
   assert.equal(productIdFromPath('/product/abc'), null)
   assert.equal(productIdFromPath('/product/4-x/../admin'), null)
 })
+
+test('uploaded photos: real image types only, and their addresses are accepted', async () => {
+  const { imageType, parseProductForm } = await import('./validate.ts')
+  assert.equal(imageType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0])), 'image/jpeg')
+  assert.equal(imageType(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0])), 'image/png')
+  assert.equal(imageType(new TextEncoder().encode('RIFF\0\0\0\0WEBPVP8 ')), 'image/webp')
+  assert.equal(imageType(new TextEncoder().encode('<svg onload=alert(1)>')), null) // SVG/HTML could carry scripts
+  assert.equal(imageType(new TextEncoder().encode('GIF89a......')), null)
+  const base = { name: 'Water', category: 'Beverages', pack: '12 × 75cl', price: '4500', bulk_price: '3980', bulk_min_qty: '10', art_kind: 'bottle', color: '#3796df' }
+  assert.equal(parseProductForm({ ...base, image_url: '/images/12' }).ok, true)
+  assert.equal(parseProductForm({ ...base, image_url: '/images/../admin' }).ok, false)
+  assert.equal(parseProductForm({ ...base, image_url: 'http://insecure.example/x.jpg' }).ok, false)
+})

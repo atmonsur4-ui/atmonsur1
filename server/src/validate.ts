@@ -115,7 +115,7 @@ export function parseProductForm(f: Record<string, unknown>): Result<ProductForm
   if (Number.isNaN(v.price_kobo)) return { ok: false, error: 'Retail price must be a number above 0.' }
   if (Number.isNaN(v.bulk_price_kobo) || v.bulk_price_kobo > v.price_kobo) return { ok: false, error: 'Wholesale price must be above 0 and not more than the retail price.' }
   if (!Number.isInteger(v.bulk_min_qty) || v.bulk_min_qty < 1) return { ok: false, error: 'Wholesale minimum must be a whole number of 1 or more.' }
-  if (v.image_url && !/^https:\/\/\S+$/.test(v.image_url)) return { ok: false, error: 'Photo link must start with https://' }
+  if (v.image_url && !/^https:\/\/\S+$/.test(v.image_url) && !UPLOADED_IMAGE.test(v.image_url)) return { ok: false, error: 'Photo link must start with https://' }
   if (!ART.includes(v.art_kind)) return { ok: false, error: 'Choose an illustration.' }
   if (!COLOR.test(v.color)) return { ok: false, error: 'Colour must look like #3796df.' }
   if (!Number.isInteger(v.sort)) return { ok: false, error: 'Order must be a whole number.' }
@@ -141,4 +141,19 @@ export function parseCategoryForm(f: Record<string, unknown>): Result<{ name: st
   if (!ART.includes(v.art_kind)) return { ok: false, error: 'Choose an illustration.' }
   if (!Number.isInteger(v.sort)) return { ok: false, error: 'Order must be a whole number.' }
   return { ok: true, value: v }
+}
+
+// ---- Uploaded photos ----
+
+/** Address of a photo uploaded in admin (served by the store itself). */
+export const UPLOADED_IMAGE = /^\/images\/(\d{1,9})$/
+export const MAX_IMAGE_BYTES = 3 * 1024 * 1024 // admin shrinks photos before upload; this only stops oversized files
+
+/** Identifies JPEG, PNG and WebP from the file's first bytes (never trust the file name or browser-sent type). */
+export function imageType(b: Uint8Array): 'image/jpeg' | 'image/png' | 'image/webp' | null {
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'
+  if (b.length > 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((x, i) => b[i] === x)) return 'image/png'
+  const ascii = (from: number, to: number) => String.fromCharCode(...b.slice(from, to))
+  if (b.length > 12 && ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp'
+  return null
 }

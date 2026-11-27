@@ -156,6 +156,14 @@ app.use('/assets/*', async (c, next) => { await next(); c.header('Cache-Control'
 app.get('/', c => c.html(pageHtml())) // not the raw dist/index.html: the preview image needs a full address
 app.get('/index.html', c => c.redirect('/', 301))
 app.use('/*', serveStatic({ root: './dist' }))
+// Product photos uploaded in admin. Each id's bytes never change, so browsers and Vercel's CDN may keep them for a year.
+app.get('/images/:id{[0-9]{1,9}}', async c => {
+  const [img] = await sql<{ mime: string; data: Buffer }[]>`select mime, data from images where id = ${Number(c.req.param('id'))}`
+  if (!img) return c.notFound()
+  return c.body(new Uint8Array(img.data), 200, {
+    'Content-Type': img.mime, 'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable', 'X-Content-Type-Options': 'nosniff',
+  })
+})
 app.get('/sitemap.xml', async c => c.body(await sitemap(), 200, { 'Content-Type': 'application/xml; charset=utf-8' }))
 app.get('/robots.txt', c => c.text(robots()))
 app.get('/product/*', async c => {

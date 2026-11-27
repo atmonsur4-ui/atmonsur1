@@ -50,10 +50,10 @@ export function Home() {
       </Link>)}</div>
     </section>
 
-    <section className="section shell home-products" aria-labelledby="best-h">
+    {products.length > 0 && <section className="section shell home-products" aria-labelledby="best-h">
       <div className="section-heading"><div><span className="kicker">Popular right now</span><h2 id="best-h">Best sellers</h2></div><Link className="text-link" to="/shop">Explore the store <Icon name="arrow" size={17} /></Link></div>
       <div className="products-grid">{products.slice(0, 3).map(p => <ProductCard key={p.id} product={p} />)}</div>
-    </section>
+    </section>}
 
     <section className="shell wholesale" id="offers" aria-labelledby="offers-h">
       <div className="wholesale-copy"><span className="kicker light">Built for your business</span><h2 id="offers-h">Buying for a shop,<br />hotel or office?</h2>

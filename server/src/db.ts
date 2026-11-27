@@ -5,34 +5,75 @@ if (!process.env.DATABASE_URL) throw new Error('Set DATABASE_URL (see .env.examp
 
 export const sql = postgres(process.env.DATABASE_URL, { max: 5, onnotice: () => {} }) // hide "already exists, skipping" notices from migrate()
 
+// Atmonsur's product range, loaded as HIDDEN drafts: pack sizes and prices aren't known yet, so each starts at a
+// ₦1 placeholder and stays off the shop until the owner sets real details in admin and ticks "Show on the website".
+const RANGE: [string, string, string, string][] = [
+  // [category, product, illustration, colour]
+  ['Beverages', 'Fizzle Mineral Water', 'bottle', '#3796df'],
+  ['Beverages', 'American Cola', 'bottle', '#7a2e1c'],
+  ['Beverages', 'Pepsi', 'bottle', '#1d4fa3'],
+  ['Beverages', 'Coca-Cola', 'bottle', '#c8102e'],
+  ['Beverages', 'Bigi Products', 'bottle', '#e8590c'],
+  ['Dairy & NDC Products', 'Kivo Goodtime Milk', 'carton', '#f2a11a'],
+  ['Dairy & NDC Products', 'Kivo Garri Mix', 'bag', '#d8a23b'],
+  ['Dairy & NDC Products', 'Leya Milk', 'carton', '#2f7ec7'],
+  ['Dairy & NDC Products', 'Checkers Peanut', 'jar', '#f4b41b'],
+  ['Dairy & NDC Products', 'Creviva Products', 'carton', '#6b3e26'],
+  ['Cleaning', 'Hypo Bleach & Cleaner', 'cleaner', '#19956f'],
+  ['Noodles & Grains', 'Chikki Chicken Noodles', 'pack', '#ef5a25'],
+  ['Noodles & Grains', 'Long & Short Grain Rice', 'bag', '#c9b38a'],
+  ['Noodles & Grains', 'Original Garri Ijebu', 'bag', '#d87a2b'],
+]
+const CATEGORIES = [
+  { name: 'Beverages', note: 'Water, soft drinks & more', color: '#e8f3ff', art_kind: 'bottle', sort: 1 },
+  { name: 'Dairy & NDC Products', note: 'Milk, cocoa & spreads', color: '#fff4dc', art_kind: 'carton', sort: 2 },
+  { name: 'Noodles & Grains', note: 'Noodles, rice & garri', color: '#f7eadf', art_kind: 'bag', sort: 3 },
+  { name: 'Cleaning', note: 'Home care', color: '#e7f7ee', art_kind: 'cleaner', sort: 4 },
+]
+// The demo products shipped before the real range was known; replaced automatically only while untouched.
+const OLD_DEMO_PRICES: Record<string, [number, number]> = { // [retail, wholesale] in kobo, exactly as shipped
+  'Fizzle Premium Table Water': [450000, 398000], 'Kivo Goodtime Milk': [1860000, 1695000], 'Original Garri Ijebu': [720000, 645000],
+  'Chicky Chicken Noodles': [1380000, 1240000], 'Checkers Crunchy Peanut': [1440000, 1275000], 'Hypo Bleach & Cleaner': [960000, 840000],
+}
+const OLD_DEMO = Object.keys(OLD_DEMO_PRICES)
+
+async function seedCatalogue() {
+  await sql`insert into categories ${sql(CATEGORIES)} on conflict (name) do update set note = excluded.note, color = excluded.color, art_kind = excluded.art_kind, sort = excluded.sort`
+  await sql`insert into products ${sql(RANGE.map(([category, name, art_kind, color], i) => ({
+    name, category, pack: 'Set pack size', price_kobo: 100, bulk_price_kobo: 100, bulk_min_qty: 5, art_kind, color, active: false, sort: i + 1,
+  })))}`
+}
+
+/** Swaps the old demo catalogue for the real range, but only if it's exactly the untouched demo and no order exists. */
+async function replaceDemoCatalogue() {
+  const products = await sql<{ name: string; price_kobo: number; bulk_price_kobo: number; image_url: string | null; description: string | null }[]>`
+    select name, price_kobo, bulk_price_kobo, image_url, description from products`
+  const untouchedDemo = products.length === OLD_DEMO.length
+    && products.every(p => OLD_DEMO_PRICES[p.name]?.join() === [p.price_kobo, p.bulk_price_kobo].join() && !p.image_url && !p.description)
+  if (!untouchedDemo) return
+  const [{ orders }] = await sql`select count(*)::int as orders from orders`
+  if (orders > 0) return
+  await sql.begin(async tx => {
+    await tx`delete from products`
+    await tx`delete from categories where name in ('Dairy', 'Grains & Noodles', 'Snacks')`
+  })
+  await seedCatalogue()
+  console.log('Replaced the demo products with the Atmonsur range (hidden until priced in admin)')
+}
+
 /** Creates tables if missing and adds starter data to an empty database. */
 export async function migrate() {
   await sql.unsafe(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'))
   const [{ count }] = await sql`select count(*)::int as count from categories`
-  if (count > 0) return
-  // PLACEHOLDERS: replace products, prices and delivery fees in the admin page before taking payments.
-  await sql`insert into categories ${sql([
-    { name: 'Beverages', note: 'Water, cola & more', color: '#e8f3ff', art_kind: 'bottle', sort: 1 },
-    { name: 'Dairy', note: 'Milk & essentials', color: '#fff4dc', art_kind: 'carton', sort: 2 },
-    { name: 'Grains & Noodles', note: 'Pantry staples', color: '#f7eadf', art_kind: 'bag', sort: 3 },
-    { name: 'Snacks', note: 'Quick bites', color: '#fff0df', art_kind: 'pack', sort: 4 },
-    { name: 'Cleaning', note: 'Home care', color: '#e7f7ee', art_kind: 'cleaner', sort: 5 },
-  ])}`
-  await sql`insert into products ${sql([
-    { name: 'Fizzle Premium Table Water', category: 'Beverages', pack: '75cl × 12 bottles', price_kobo: 450000, bulk_price_kobo: 398000, bulk_min_qty: 10, badge: 'Bestseller', art_kind: 'bottle', color: '#3796df', sort: 1 },
-    { name: 'Kivo Goodtime Milk', category: 'Dairy', pack: '400g × 12 sachets', price_kobo: 1860000, bulk_price_kobo: 1695000, bulk_min_qty: 5, badge: 'Save 9%', art_kind: 'carton', color: '#f2a11a', sort: 2 },
-    { name: 'Original Garri Ijebu', category: 'Grains & Noodles', pack: '5kg sealed bag', price_kobo: 720000, bulk_price_kobo: 645000, bulk_min_qty: 5, badge: null, art_kind: 'bag', color: '#d87a2b', sort: 3 },
-    { name: 'Chicky Chicken Noodles', category: 'Grains & Noodles', pack: '70g × 40 packs', price_kobo: 1380000, bulk_price_kobo: 1240000, bulk_min_qty: 5, badge: 'Popular', art_kind: 'pack', color: '#ef5a25', sort: 4 },
-    { name: 'Checkers Crunchy Peanut', category: 'Snacks', pack: '100g × 24 jars', price_kobo: 1440000, bulk_price_kobo: 1275000, bulk_min_qty: 5, badge: 'New', art_kind: 'jar', color: '#f4b41b', sort: 5 },
-    { name: 'Hypo Bleach & Cleaner', category: 'Cleaning', pack: '500ml × 12 bottles', price_kobo: 960000, bulk_price_kobo: 840000, bulk_min_qty: 5, badge: null, art_kind: 'cleaner', color: '#19956f', sort: 6 },
-  ])}`
+  if (count > 0) return replaceDemoCatalogue()
+  await seedCatalogue()
   await sql`insert into delivery_zones ${sql([
     { id: 'pickup', name: 'Pick up from our Epe store (free)', fee_kobo: 0, needs_address: false, sort: 1 },
     { id: 'epe', name: 'Delivery within Epe', fee_kobo: 150000, needs_address: true, sort: 2 },
     { id: 'lagos', name: 'Delivery elsewhere in Lagos', fee_kobo: 400000, needs_address: true, sort: 3 },
     { id: 'outside-lagos', name: 'Delivery outside Lagos', fee_kobo: 800000, needs_address: true, sort: 4 },
   ])}`
-  console.log('Database was empty: added starter categories, products and delivery zones')
+  console.log('Database was empty: added categories, the product range (hidden until priced) and delivery options')
 }
 
 export type OrderRow = {

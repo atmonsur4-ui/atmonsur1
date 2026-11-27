@@ -124,3 +124,12 @@ alter table products add column if not exists description text;
 -- How the customer pays: 'palmpay' (online, before the order counts) or 'on_delivery' (cash or transfer on delivery or pickup,
 -- used while PalmPay isn't set up). On-delivery orders stay status 'pending' until the owner marks them paid in admin.
 alter table orders add column if not exists payment_method text not null default 'palmpay';
+
+-- Product photos uploaded in admin, stored in the database so no extra file-storage service is needed.
+-- Served at /images/<id>; a replaced photo gets a new id, so each address can be cached forever.
+create table if not exists images (
+  id int generated always as identity primary key,
+  mime text not null check (mime in ('image/jpeg', 'image/png', 'image/webp')),
+  data bytea not null,
+  created_at timestamptz not null default now()
+);

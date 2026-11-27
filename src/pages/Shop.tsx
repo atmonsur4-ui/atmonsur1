@@ -43,7 +43,9 @@ export function Shop() {
       <CatalogueStatus />
       {catalogue && (visible.length
         ? <div className="products-grid">{visible.map(p => <ProductCard key={p.id} product={p} />)}</div>
-        : <div className="empty">No matching products found. Try another search or category, or <Link className="underline" to="/contact">ask us</Link>.</div>)}
+        : catalogue.products.length === 0
+          ? <div className="empty">Our online price list is being updated. To order now, <a className="underline" href={CONTACT.phoneHref}>call {CONTACT.phone}</a> or <Link className="underline" to="/contact">send us a message</Link>.</div>
+          : <div className="empty">No matching products found. Try another search or category, or <Link className="underline" to="/contact">ask us</Link>.</div>)}
     </section>
     <section className="shop-help"><div className="shell">
       <div><span className="kicker light">Personal service</span><h2>Not sure what to order?</h2><p>Talk to our team about stock, pack sizes or bulk delivery arrangements.</p></div>
